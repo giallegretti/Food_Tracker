@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { formatGrams } from "@/lib/constants";
+import { getHouseholdMeasures } from "@/lib/household-measures";
 import { Doc } from "../../../convex/_generated/dataModel";
 
 interface PortionInputProps {
@@ -19,7 +20,18 @@ export function PortionInput({
   onCancel,
   suggestedGrams,
 }: PortionInputProps) {
-  const [grams, setGrams] = useState(suggestedGrams ?? 100);
+  const householdMeasures = useMemo(
+    () => getHouseholdMeasures(food.name),
+    [food.name]
+  );
+
+  // Default to first household measure if available, else 100g
+  const defaultGrams =
+    suggestedGrams ?? (householdMeasures.length > 0 ? householdMeasures[0].grams : 100);
+  const [grams, setGrams] = useState(defaultGrams);
+  const [activeLabel, setActiveLabel] = useState<string | null>(
+    suggestedGrams ? null : householdMeasures.length > 0 ? householdMeasures[0].label : null
+  );
 
   const scaled = useMemo(() => {
     const factor = grams / 100;
@@ -31,39 +43,82 @@ export function PortionInput({
     };
   }, [food, grams]);
 
-  const QUICK_AMOUNTS = [50, 100, 150, 200, 300];
+  const hasMeasures = householdMeasures.length > 0;
+  const GRAM_AMOUNTS = [50, 100, 150, 200, 300];
 
   return (
     <div className="rounded-xl bg-card p-4 space-y-4">
       <div>
         <h3 className="text-base font-semibold">{food.name}</h3>
-        <p className="text-[11px] text-muted-foreground">{food.category}</p>
+        <p className="text-[11px] text-muted-foreground">
+          {food.category} · {Math.round(food.energy_kcal)} kcal/100g
+        </p>
       </div>
 
+      {/* Household measures - primary option when available */}
+      {hasMeasures && (
+        <div>
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
+            Medida caseira
+          </label>
+          <div className="flex flex-wrap gap-1.5">
+            {householdMeasures.map((m) => (
+              <button
+                key={m.label}
+                onClick={() => {
+                  setGrams(m.grams);
+                  setActiveLabel(m.label);
+                }}
+                className={`rounded-lg px-3 py-2 text-xs font-medium transition-all active:scale-95 ${
+                  activeLabel === m.label
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-secondary hover:bg-accent"
+                }`}
+              >
+                {m.label}
+                <span className="text-[10px] ml-1 opacity-70">
+                  {m.grams}g
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Grams input */}
       <div>
         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
-          Quantidade (g)
+          {hasMeasures ? "Ou digite em gramas" : "Quantidade (g)"}
         </label>
         <Input
           type="number"
           inputMode="numeric"
           value={grams}
-          onChange={(e) => setGrams(Number(e.target.value) || 0)}
+          onChange={(e) => {
+            setGrams(Number(e.target.value) || 0);
+            setActiveLabel(null);
+          }}
           className="text-2xl font-bold h-14 rounded-xl bg-secondary border-0 text-center tabular-nums"
         />
-        <div className="flex gap-1.5 mt-2">
-          {QUICK_AMOUNTS.map((amount) => (
-            <button
-              key={amount}
-              onClick={() => setGrams(amount)}
-              className="flex-1 rounded-lg bg-secondary px-2 py-1.5 text-xs font-medium transition-colors hover:bg-accent active:scale-95 tabular-nums"
-            >
-              {amount}g
-            </button>
-          ))}
-        </div>
+        {!hasMeasures && (
+          <div className="flex gap-1.5 mt-2">
+            {GRAM_AMOUNTS.map((amount) => (
+              <button
+                key={amount}
+                onClick={() => {
+                  setGrams(amount);
+                  setActiveLabel(null);
+                }}
+                className="flex-1 rounded-lg bg-secondary px-2 py-1.5 text-xs font-medium transition-colors hover:bg-accent active:scale-95 tabular-nums"
+              >
+                {amount}g
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
+      {/* Nutrition preview */}
       <div className="grid grid-cols-4 gap-2">
         <div className="rounded-lg bg-primary/10 p-2 text-center">
           <div className="text-lg font-bold text-primary tabular-nums">
