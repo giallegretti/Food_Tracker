@@ -1,0 +1,144 @@
+import { query, mutation } from "./_generated/server";
+import { v } from "convex/values";
+
+const logItemValidator = v.object({
+  foodId: v.optional(v.id("foods")),
+  name: v.string(),
+  portionGrams: v.float64(),
+  energy_kcal: v.float64(),
+  protein_g: v.float64(),
+  carbs_g: v.float64(),
+  lipids_g: v.float64(),
+});
+
+// Get all log entries for a user on a specific date
+export const getByDate = query({
+  args: { userId: v.string(), date: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("dailyLogEntries")
+      .withIndex("by_user_date", (q) =>
+        q.eq("userId", args.userId).eq("date", args.date)
+      )
+      .collect();
+  },
+});
+
+// Get daily totals for a user on a specific date
+export const getDailyTotals = query({
+  args: { userId: v.string(), date: v.string() },
+  handler: async (ctx, args) => {
+    const entries = await ctx.db
+      .query("dailyLogEntries")
+      .withIndex("by_user_date", (q) =>
+        q.eq("userId", args.userId).eq("date", args.date)
+      )
+      .collect();
+
+    const totals = {
+      kcal: 0,
+      protein: 0,
+      carbs: 0,
+      fat: 0,
+      byModule: {} as Record<
+        string,
+        { kcal: number; protein: number; carbs: number; fat: number }
+      >,
+    };
+
+    for (const entry of entries) {
+      totals.kcal += entry.totalKcal;
+      totals.protein += entry.totalProtein;
+      totals.carbs += entry.totalCarbs;
+      totals.fat += entry.totalFat;
+
+      if (!totals.byModule[entry.module]) {
+        totals.byModule[entry.module] = {
+          kcal: 0,
+          protein: 0,
+          carbs: 0,
+          fat: 0,
+        };
+      }
+      totals.byModule[entry.module].kcal += entry.totalKcal;
+      totals.byModule[entry.module].protein += entry.totalProtein;
+      totals.byModule[entry.module].carbs += entry.totalCarbs;
+      totals.byModule[entry.module].fat += entry.totalFat;
+    }
+
+    return totals;
+  },
+});
+
+// Add a log entry
+export const addEntry = mutation({
+  args: {
+    userId: v.string(),
+    date: v.string(),
+    module: v.string(),
+    recipeId: v.optional(v.id("recipes")),
+    items: v.array(logItemValidator),
+    note: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const totalKcal = args.items.reduce((s, i) => s + i.energy_kcal, 0);
+    const totalProtein = args.items.reduce((s, i) => s + i.protein_g, 0);
+    const totalCarbs = args.items.reduce((s, i) => s + i.carbs_g, 0);
+    const totalFat = args.items.reduce((s, i) => s + i.lipids_g, 0);
+
+    return await ctx.db.insert("dailyLogEntries", {
+      userId: args.userId,
+      date: args.date,
+      module: args.module,
+      recipeId: args.recipeId,
+      items: args.items,
+      totalKcal,
+      totalProtein,
+      totalCarbs,
+      totalFat,
+      note: args.note,
+    });
+  },
+});
+
+// Delete a log entry
+export const deleteEntry = mutation({
+  args: { id: v.id("dailyLogEntries") },
+  handler: async (ctx, args) => {
+    await ctx.db.delete(args.id);
+  },
+});
+
+// Copy all entries from one date to another
+export const copyDay = mutation({
+  args: {
+    userId: v.string(),
+    fromDate: v.string(),
+    toDate: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const entries = await ctx.db
+      .query("dailyLogEntries")
+      .withIndex("by_user_date", (q) =>
+        q.eq("userId", args.userId).eq("date", args.fromDate)
+      )
+      .collect();
+
+    for (const entry of entries) {
+      await ctx.db.insert("dailyLogEntries", {
+        userId: args.userId,
+        date: args.toDate,
+        module: entry.module,
+        recipeId: entry.recipeId,
+        items: entry.items,
+        totalKcal: entry.totalKcal,
+        totalProtein: entry.totalProtein,
+        totalCarbs: entry.totalCarbs,
+        totalFat: entry.totalFat,
+        note: entry.note,
+      });
+    }
+
+    return entries.length;
+  },
+});
