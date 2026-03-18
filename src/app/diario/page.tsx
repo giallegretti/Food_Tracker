@@ -9,6 +9,7 @@ import { UserSwitcher } from "@/components/layout/UserSwitcher";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { FoodSearch } from "@/components/food/FoodSearch";
 import { PortionInput } from "@/components/food/PortionInput";
+import { RecipePicker } from "@/components/food/RecipePicker";
 import { ModuleCard } from "@/components/meals/ModuleCard";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,6 +29,7 @@ function DiarioContent() {
   const [activeModule, setActiveModule] = useState<string | null>(
     searchParams.get("modulo")
   );
+  const [addTab, setAddTab] = useState<"alimentos" | "receitas">("alimentos");
   const [selectedFood, setSelectedFood] = useState<Doc<"foods"> | null>(null);
   const [pendingItems, setPendingItems] = useState<
     Array<{
@@ -64,6 +66,23 @@ function DiarioContent() {
         },
       ]);
       setSelectedFood(null);
+    },
+    []
+  );
+
+  const handleAddRecipe = useCallback(
+    (recipe: Doc<"recipes">) => {
+      const items = recipe.items.map((item) => ({
+        foodId: item.foodId,
+        name: item.name,
+        portionGrams: item.portionGrams,
+        energy_kcal: item.energy_kcal,
+        protein_g: item.protein_g,
+        carbs_g: item.carbs_g,
+        lipids_g: item.lipids_g,
+      }));
+      setPendingItems((prev) => [...prev, ...items]);
+      setAddTab("alimentos");
     },
     []
   );
@@ -140,6 +159,7 @@ function DiarioContent() {
               onClick={() => {
                 setActiveModule(mod);
                 setPendingItems([]);
+                setAddTab("alimentos");
               }}
             />
 
@@ -182,6 +202,7 @@ function DiarioContent() {
           onClick={() => {
             setActiveModule("extra");
             setPendingItems([]);
+            setAddTab("alimentos");
           }}
         >
           + Adicionar alimento extra
@@ -196,6 +217,7 @@ function DiarioContent() {
             setActiveModule(null);
             setPendingItems([]);
             setSelectedFood(null);
+            setAddTab("alimentos");
           }
         }}
       >
@@ -214,17 +236,45 @@ function DiarioContent() {
           </SheetHeader>
 
           <div className="mt-4 space-y-4 overflow-y-auto max-h-[calc(85vh-140px)]">
+            {/* Tab switcher */}
+            {!selectedFood && (
+              <div className="flex gap-1 rounded-xl bg-secondary p-1">
+                <button
+                  onClick={() => setAddTab("alimentos")}
+                  className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
+                    addTab === "alimentos"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  Alimentos
+                </button>
+                <button
+                  onClick={() => setAddTab("receitas")}
+                  className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
+                    addTab === "receitas"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  Receitas
+                </button>
+              </div>
+            )}
+
             {selectedFood ? (
               <PortionInput
                 food={selectedFood}
                 onConfirm={handleAddFood}
                 onCancel={() => setSelectedFood(null)}
               />
-            ) : (
+            ) : addTab === "alimentos" ? (
               <FoodSearch
                 onSelect={(food) => setSelectedFood(food)}
                 placeholder="Buscar alimento para adicionar..."
               />
+            ) : (
+              <RecipePicker onSelect={handleAddRecipe} />
             )}
 
             {/* Pending items */}
