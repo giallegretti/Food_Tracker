@@ -18,13 +18,16 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { MODULE_ORDER, MODULE_LABELS, getTodayISO, formatKcal } from "@/lib/constants";
+import { MODULE_ORDER, MODULE_LABELS, getTodayISO, shiftDate, formatKcal } from "@/lib/constants";
 import { Doc } from "../../../convex/_generated/dataModel";
 
 function DiarioContent() {
   const searchParams = useSearchParams();
   const { userId, setUserId } = useCurrentUser();
   const today = getTodayISO();
+
+  const [selectedDate, setSelectedDate] = useState(today);
+  const isToday = selectedDate === today;
 
   const [activeModule, setActiveModule] = useState<string | null>(
     searchParams.get("modulo")
@@ -44,8 +47,9 @@ function DiarioContent() {
   >([]);
 
   const profile = useQuery(api.userProfiles.getByUserId, { userId });
-  const entries = useQuery(api.dailyLog.getByDate, { userId, date: today });
-  const totals = useQuery(api.dailyLog.getDailyTotals, { userId, date: today });
+  const entries = useQuery(api.dailyLog.getByDate, { userId, date: selectedDate });
+  const totals = useQuery(api.dailyLog.getDailyTotals, { userId, date: selectedDate });
+  const datesWithEntries = useQuery(api.dailyLog.getDatesWithEntries, { userId });
 
   const addEntry = useMutation(api.dailyLog.addEntry);
   const deleteEntry = useMutation(api.dailyLog.deleteEntry);
@@ -91,13 +95,13 @@ function DiarioContent() {
     if (!activeModule || pendingItems.length === 0) return;
     await addEntry({
       userId,
-      date: today,
+      date: selectedDate,
       module: activeModule,
       items: pendingItems,
     });
     setPendingItems([]);
     setActiveModule(null);
-  }, [activeModule, pendingItems, userId, today, addEntry]);
+  }, [activeModule, pendingItems, userId, selectedDate, addEntry]);
 
   if (!profile || totals === undefined) {
     return (
@@ -117,19 +121,47 @@ function DiarioContent() {
 
   const pendingTotal = pendingItems.reduce((s, i) => s + i.energy_kcal, 0);
 
+  const formattedDate = new Date(selectedDate + "T12:00:00").toLocaleDateString("pt-BR", {
+    weekday: "long",
+    day: "numeric",
+    month: "short",
+  });
+
   return (
     <div className="min-h-screen pb-24">
+      {/* Header with date navigation */}
       <div className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl safe-top">
         <div className="mx-auto flex max-w-md items-center justify-between px-4 py-3">
-          <div>
-            <h1 className="text-base font-bold tracking-tight">Diario</h1>
-            <p className="text-[11px] text-muted-foreground capitalize">
-              {new Date(today + "T12:00:00").toLocaleDateString("pt-BR", {
-                weekday: "long",
-                day: "numeric",
-                month: "short",
-              })}
-            </p>
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <h1 className="text-base font-bold tracking-tight">Diario</h1>
+              {!isToday && (
+                <button
+                  onClick={() => setSelectedDate(today)}
+                  className="text-[10px] font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full"
+                >
+                  Hoje
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2 mt-0.5">
+              <button
+                onClick={() => setSelectedDate(shiftDate(selectedDate, -1))}
+                className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-secondary text-muted-foreground"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+              </button>
+              <p className="text-[11px] text-muted-foreground capitalize">
+                {formattedDate}
+              </p>
+              <button
+                onClick={() => setSelectedDate(shiftDate(selectedDate, 1))}
+                disabled={isToday}
+                className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-secondary text-muted-foreground disabled:opacity-30 disabled:hover:bg-transparent"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+              </button>
+            </div>
           </div>
           <UserSwitcher userId={userId} onSwitch={setUserId} />
         </div>
@@ -156,11 +188,11 @@ function DiarioContent() {
               consumed={totals.byModule[mod]?.kcal || 0}
               budget={profile.modules[mod]}
               itemCount={moduleItemCount[mod]}
-              onClick={() => {
+              onClick={isToday ? () => {
                 setActiveModule(mod);
                 setPendingItems([]);
                 setAddTab("alimentos");
-              }}
+              } : undefined}
             />
 
             {/* Logged entries for this module */}
@@ -184,146 +216,187 @@ function DiarioContent() {
                       </span>
                     </div>
                   ))}
-                  <button
-                    onClick={() => deleteEntry({ id: entry._id })}
-                    className="text-[11px] text-red-400/70 hover:text-red-400 mt-0.5 font-medium"
-                  >
-                    Remover
-                  </button>
+                  {isToday && (
+                    <button
+                      onClick={() => deleteEntry({ id: entry._id })}
+                      className="text-[11px] text-red-400/70 hover:text-red-400 mt-0.5 font-medium"
+                    >
+                      Remover
+                    </button>
+                  )}
                 </div>
               ))}
           </div>
         ))}
 
-        {/* Extra food button */}
-        <Button
-          variant="secondary"
-          className="w-full h-11 rounded-xl"
-          onClick={() => {
-            setActiveModule("extra");
-            setPendingItems([]);
-            setAddTab("alimentos");
-          }}
-        >
-          + Adicionar alimento extra
-        </Button>
+        {/* Extra food button - only for today */}
+        {isToday && (
+          <Button
+            variant="secondary"
+            className="w-full h-11 rounded-xl"
+            onClick={() => {
+              setActiveModule("extra");
+              setPendingItems([]);
+              setAddTab("alimentos");
+            }}
+          >
+            + Adicionar alimento extra
+          </Button>
+        )}
+
+        {/* History section */}
+        {datesWithEntries && datesWithEntries.length > 0 && (
+          <div className="pt-4 space-y-2">
+            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Historico
+            </h2>
+            <div className="space-y-1">
+              {datesWithEntries.map(({ date, totalKcal }) => {
+                const isSelected = date === selectedDate;
+                const dateLabel = date === today ? "Hoje" : new Date(date + "T12:00:00").toLocaleDateString("pt-BR", {
+                  weekday: "short",
+                  day: "numeric",
+                  month: "short",
+                });
+                return (
+                  <button
+                    key={date}
+                    onClick={() => setSelectedDate(date)}
+                    className={`w-full flex items-center justify-between rounded-xl px-4 py-3 text-sm transition-colors ${
+                      isSelected
+                        ? "bg-primary/10 text-primary font-medium"
+                        : "bg-card hover:bg-secondary"
+                    }`}
+                  >
+                    <span className="capitalize">{dateLabel}</span>
+                    <span className="tabular-nums text-muted-foreground">
+                      {formatKcal(totalKcal)} kcal
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Add food sheet */}
-      <Sheet
-        open={activeModule !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setActiveModule(null);
-            setPendingItems([]);
-            setSelectedFood(null);
-            setAddTab("alimentos");
-          }
-        }}
-      >
-        <SheetContent side="bottom" className="h-[85vh] rounded-t-2xl border-t border-border/50">
-          <SheetHeader>
-            <SheetTitle className="text-left">
-              {activeModule
-                ? MODULE_LABELS[activeModule] || "Extra"
-                : "Adicionar"}
-              {activeModule && activeModule !== "extra" && profile && (
-                <span className="text-xs font-normal text-muted-foreground ml-2">
-                  Meta: {Math.round(profile.modules[activeModule as keyof typeof profile.modules] || 0)} kcal
-                </span>
-              )}
-            </SheetTitle>
-          </SheetHeader>
-
-          <div className="mt-4 space-y-4 overflow-y-auto max-h-[calc(85vh-140px)]">
-            {/* Tab switcher */}
-            {!selectedFood && (
-              <div className="flex gap-1 rounded-xl bg-secondary p-1">
-                <button
-                  onClick={() => setAddTab("alimentos")}
-                  className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
-                    addTab === "alimentos"
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground"
-                  }`}
-                >
-                  Alimentos
-                </button>
-                <button
-                  onClick={() => setAddTab("receitas")}
-                  className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
-                    addTab === "receitas"
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground"
-                  }`}
-                >
-                  Receitas
-                </button>
-              </div>
-            )}
-
-            {selectedFood ? (
-              <PortionInput
-                food={selectedFood}
-                onConfirm={handleAddFood}
-                onCancel={() => setSelectedFood(null)}
-              />
-            ) : addTab === "alimentos" ? (
-              <FoodSearch
-                onSelect={(food) => setSelectedFood(food)}
-                placeholder="Buscar alimento para adicionar..."
-              />
-            ) : (
-              <RecipePicker onSelect={handleAddRecipe} />
-            )}
-
-            {/* Pending items */}
-            {pendingItems.length > 0 && (
-              <div className="space-y-2">
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Itens a adicionar ({pendingItems.length})
-                </h3>
-                {pendingItems.map((item, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between rounded-xl bg-secondary p-3 text-sm"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="truncate font-medium">{item.name}</p>
-                      <p className="text-[11px] text-muted-foreground tabular-nums">
-                        {Math.round(item.portionGrams)}g
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="font-bold tabular-nums">
-                        {Math.round(item.energy_kcal)} kcal
-                      </span>
-                      <button
-                        onClick={() =>
-                          setPendingItems((prev) =>
-                            prev.filter((_, idx) => idx !== i)
-                          )
-                        }
-                        className="text-red-400 text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full hover:bg-red-400/10"
-                      >
-                        X
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between pt-2 border-t border-border/50">
-                  <span className="font-bold tabular-nums">
-                    Total: {Math.round(pendingTotal)} kcal
+      {/* Add food sheet - only for today */}
+      {isToday && (
+        <Sheet
+          open={activeModule !== null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setActiveModule(null);
+              setPendingItems([]);
+              setSelectedFood(null);
+              setAddTab("alimentos");
+            }
+          }}
+        >
+          <SheetContent side="bottom" className="h-[85vh] rounded-t-2xl border-t border-border/50">
+            <SheetHeader>
+              <SheetTitle className="text-left">
+                {activeModule
+                  ? MODULE_LABELS[activeModule] || "Extra"
+                  : "Adicionar"}
+                {activeModule && activeModule !== "extra" && profile && (
+                  <span className="text-xs font-normal text-muted-foreground ml-2">
+                    Meta: {Math.round(profile.modules[activeModule as keyof typeof profile.modules] || 0)} kcal
                   </span>
-                  <Button onClick={handleSaveModule} className="rounded-xl h-10 px-6 font-semibold">
-                    Salvar
-                  </Button>
+                )}
+              </SheetTitle>
+            </SheetHeader>
+
+            <div className="mt-4 space-y-4 overflow-y-auto max-h-[calc(85vh-140px)]">
+              {/* Tab switcher */}
+              {!selectedFood && (
+                <div className="flex gap-1 rounded-xl bg-secondary p-1">
+                  <button
+                    onClick={() => setAddTab("alimentos")}
+                    className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
+                      addTab === "alimentos"
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground"
+                    }`}
+                  >
+                    Alimentos
+                  </button>
+                  <button
+                    onClick={() => setAddTab("receitas")}
+                    className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
+                      addTab === "receitas"
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground"
+                    }`}
+                  >
+                    Receitas
+                  </button>
                 </div>
-              </div>
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
+              )}
+
+              {selectedFood ? (
+                <PortionInput
+                  food={selectedFood}
+                  onConfirm={handleAddFood}
+                  onCancel={() => setSelectedFood(null)}
+                />
+              ) : addTab === "alimentos" ? (
+                <FoodSearch
+                  onSelect={(food) => setSelectedFood(food)}
+                  placeholder="Buscar alimento para adicionar..."
+                />
+              ) : (
+                <RecipePicker onSelect={handleAddRecipe} />
+              )}
+
+              {/* Pending items */}
+              {pendingItems.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Itens a adicionar ({pendingItems.length})
+                  </h3>
+                  {pendingItems.map((item, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between rounded-xl bg-secondary p-3 text-sm"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="truncate font-medium">{item.name}</p>
+                        <p className="text-[11px] text-muted-foreground tabular-nums">
+                          {Math.round(item.portionGrams)}g
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-bold tabular-nums">
+                          {Math.round(item.energy_kcal)} kcal
+                        </span>
+                        <button
+                          onClick={() =>
+                            setPendingItems((prev) =>
+                              prev.filter((_, idx) => idx !== i)
+                            )
+                          }
+                          className="text-red-400 text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full hover:bg-red-400/10"
+                        >
+                          X
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between pt-2 border-t border-border/50">
+                    <span className="font-bold tabular-nums">
+                      Total: {Math.round(pendingTotal)} kcal
+                    </span>
+                    <Button onClick={handleSaveModule} className="rounded-xl h-10 px-6 font-semibold">
+                      Salvar
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </SheetContent>
+        </Sheet>
+      )}
 
       <BottomNav />
     </div>

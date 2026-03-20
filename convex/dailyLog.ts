@@ -109,6 +109,26 @@ export const deleteEntry = mutation({
   },
 });
 
+// Get all dates with entries for a user (for history view)
+export const getDatesWithEntries = query({
+  args: { userId: v.string() },
+  handler: async (ctx, args) => {
+    const entries = await ctx.db
+      .query("dailyLogEntries")
+      .withIndex("by_user_date", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    const dateMap = new Map<string, number>();
+    for (const entry of entries) {
+      dateMap.set(entry.date, (dateMap.get(entry.date) || 0) + entry.totalKcal);
+    }
+
+    return Array.from(dateMap.entries())
+      .map(([date, totalKcal]) => ({ date, totalKcal }))
+      .sort((a, b) => b.date.localeCompare(a.date));
+  },
+});
+
 // Copy all entries from one date to another
 export const copyDay = mutation({
   args: {
