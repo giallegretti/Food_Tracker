@@ -118,13 +118,33 @@ export const getDatesWithEntries = query({
       .withIndex("by_user_date", (q) => q.eq("userId", args.userId))
       .collect();
 
-    const dateMap = new Map<string, number>();
+    const dateMap = new Map<
+      string,
+      { kcal: number; protein: number; carbs: number; fat: number }
+    >();
     for (const entry of entries) {
-      dateMap.set(entry.date, (dateMap.get(entry.date) || 0) + entry.totalKcal);
+      const prev = dateMap.get(entry.date) || {
+        kcal: 0,
+        protein: 0,
+        carbs: 0,
+        fat: 0,
+      };
+      dateMap.set(entry.date, {
+        kcal: prev.kcal + entry.totalKcal,
+        protein: prev.protein + entry.totalProtein,
+        carbs: prev.carbs + entry.totalCarbs,
+        fat: prev.fat + entry.totalFat,
+      });
     }
 
     return Array.from(dateMap.entries())
-      .map(([date, totalKcal]) => ({ date, totalKcal }))
+      .map(([date, totals]) => ({
+        date,
+        totalKcal: totals.kcal,
+        totalProtein: totals.protein,
+        totalCarbs: totals.carbs,
+        totalFat: totals.fat,
+      }))
       .sort((a, b) => b.date.localeCompare(a.date));
   },
 });
