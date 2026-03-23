@@ -1,6 +1,7 @@
 "use client";
 
-import { useQuery } from "convex/react";
+import { useState, useCallback } from "react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { UserSwitcher } from "@/components/layout/UserSwitcher";
@@ -8,16 +9,90 @@ import { BottomNav } from "@/components/layout/BottomNav";
 import { DailyRing } from "@/components/dashboard/DailyRing";
 import { MacroBreakdown } from "@/components/dashboard/MacroBreakdown";
 import { ModuleCard } from "@/components/meals/ModuleCard";
-import { MODULE_ORDER, getTodayISO } from "@/lib/constants";
-import Link from "next/link";
+import { FoodSearch } from "@/components/food/FoodSearch";
+import { PortionInput } from "@/components/food/PortionInput";
+import { RecipePicker } from "@/components/food/RecipePicker";
+import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { MODULE_ORDER, MODULE_LABELS, getTodayISO } from "@/lib/constants";
+import { Doc } from "../../../convex/_generated/dataModel";
 
 export default function DashboardPage() {
   const { userId, setUserId } = useCurrentUser();
   const today = getTodayISO();
 
+  const [activeModule, setActiveModule] = useState<string | null>(null);
+  const [addTab, setAddTab] = useState<"alimentos" | "receitas">("alimentos");
+  const [selectedFood, setSelectedFood] = useState<Doc<"foods"> | null>(null);
+  const [pendingItems, setPendingItems] = useState<
+    Array<{
+      foodId: Doc<"foods">["_id"];
+      name: string;
+      portionGrams: number;
+      energy_kcal: number;
+      protein_g: number;
+      carbs_g: number;
+      lipids_g: number;
+    }>
+  >([]);
+
   const profile = useQuery(api.userProfiles.getByUserId, { userId });
   const totals = useQuery(api.dailyLog.getDailyTotals, { userId, date: today });
   const entries = useQuery(api.dailyLog.getByDate, { userId, date: today });
+
+  const addEntry = useMutation(api.dailyLog.addEntry);
+  const deleteEntry = useMutation(api.dailyLog.deleteEntry);
+
+  const handleAddFood = useCallback(
+    (food: Doc<"foods">, grams: number) => {
+      const factor = grams / 100;
+      setPendingItems((prev) => [
+        ...prev,
+        {
+          foodId: food._id,
+          name: food.name,
+          portionGrams: grams,
+          energy_kcal: food.energy_kcal * factor,
+          protein_g: food.protein_g * factor,
+          carbs_g: food.carbs_g * factor,
+          lipids_g: food.lipids_g * factor,
+        },
+      ]);
+      setSelectedFood(null);
+    },
+    []
+  );
+
+  const handleAddRecipe = useCallback((recipe: Doc<"recipes">) => {
+    const items = recipe.items.map((item) => ({
+      foodId: item.foodId,
+      name: item.name,
+      portionGrams: item.portionGrams,
+      energy_kcal: item.energy_kcal,
+      protein_g: item.protein_g,
+      carbs_g: item.carbs_g,
+      lipids_g: item.lipids_g,
+    }));
+    setPendingItems((prev) => [...prev, ...items]);
+    setAddTab("alimentos");
+  }, []);
+
+  const handleSaveModule = useCallback(async () => {
+    if (!activeModule || pendingItems.length === 0) return;
+    await addEntry({
+      userId,
+      date: today,
+      module: activeModule,
+      items: pendingItems,
+    });
+    setPendingItems([]);
+    setActiveModule(null);
+  }, [activeModule, pendingItems, userId, today, addEntry]);
 
   if (!profile || totals === undefined) {
     return (
@@ -40,6 +115,8 @@ export default function DashboardPage() {
         (moduleItemCount[entry.module] || 0) + entry.items.length;
     }
   }
+
+  const pendingTotal = pendingItems.reduce((s, i) => s + i.energy_kcal, 0);
 
   const todayFormatted = new Date(today + "T12:00:00").toLocaleDateString(
     "pt-BR",
@@ -80,14 +157,51 @@ export default function DashboardPage() {
             Refeicoes
           </h2>
           {MODULE_ORDER.map((mod) => (
-            <Link key={mod} href={`/diario?modulo=${mod}`}>
+            <div key={mod} className="space-y-0">
               <ModuleCard
                 module={mod}
                 consumed={totals.byModule[mod]?.kcal || 0}
                 budget={profile.modules[mod]}
                 itemCount={moduleItemCount[mod]}
+                onClick={() => {
+                  setActiveModule(mod);
+                  setPendingItems([]);
+                  setAddTab("alimentos");
+                  setSelectedFood(null);
+                }}
               />
-            </Link>
+
+              {/* Logged entries for this module */}
+              {entries
+                ?.filter((e) => e.module === mod)
+                .map((entry) => (
+                  <div
+                    key={entry._id}
+                    className="ml-10 border-l border-border/40 pl-3 py-1.5"
+                  >
+                    {entry.items.map((item, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center justify-between text-xs py-0.5"
+                      >
+                        <span className="truncate flex-1 text-muted-foreground">
+                          {item.name}
+                        </span>
+                        <span className="text-muted-foreground/70 ml-2 shrink-0 tabular-nums">
+                          {Math.round(item.portionGrams)}g ·{" "}
+                          {Math.round(item.energy_kcal)} kcal
+                        </span>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => deleteEntry({ id: entry._id })}
+                      className="text-[11px] text-red-400/70 hover:text-red-400 mt-0.5 font-medium"
+                    >
+                      Remover
+                    </button>
+                  </div>
+                ))}
+            </div>
           ))}
           {totals.byModule["extra"] && (
             <ModuleCard
@@ -99,9 +213,151 @@ export default function DashboardPage() {
           )}
         </div>
 
+        {/* Extra food button */}
+        <Button
+          variant="secondary"
+          className="w-full h-11 rounded-xl"
+          onClick={() => {
+            setActiveModule("extra");
+            setPendingItems([]);
+            setAddTab("alimentos");
+            setSelectedFood(null);
+          }}
+        >
+          + Adicionar alimento extra
+        </Button>
+
         {/* Partner View */}
         <PartnerView currentUserId={userId} date={today} />
       </div>
+
+      {/* Add food sheet */}
+      <Sheet
+        open={activeModule !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setActiveModule(null);
+            setPendingItems([]);
+            setSelectedFood(null);
+            setAddTab("alimentos");
+          }
+        }}
+      >
+        <SheetContent
+          side="bottom"
+          className="h-[85vh] rounded-t-2xl border-t border-border/50"
+        >
+          <SheetHeader>
+            <SheetTitle className="text-left">
+              {activeModule
+                ? MODULE_LABELS[activeModule] || "Extra"
+                : "Adicionar"}
+              {activeModule && activeModule !== "extra" && profile && (
+                <span className="text-xs font-normal text-muted-foreground ml-2">
+                  Meta:{" "}
+                  {Math.round(
+                    profile.modules[
+                      activeModule as keyof typeof profile.modules
+                    ] || 0
+                  )}{" "}
+                  kcal
+                </span>
+              )}
+            </SheetTitle>
+          </SheetHeader>
+
+          <div className="mt-4 space-y-4 overflow-y-auto max-h-[calc(85vh-140px)]">
+            {/* Tab switcher */}
+            {!selectedFood && (
+              <div className="flex gap-1 rounded-xl bg-secondary p-1">
+                <button
+                  onClick={() => setAddTab("alimentos")}
+                  className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
+                    addTab === "alimentos"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  Alimentos
+                </button>
+                <button
+                  onClick={() => setAddTab("receitas")}
+                  className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
+                    addTab === "receitas"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  Receitas
+                </button>
+              </div>
+            )}
+
+            {selectedFood ? (
+              <PortionInput
+                food={selectedFood}
+                onConfirm={handleAddFood}
+                onCancel={() => setSelectedFood(null)}
+              />
+            ) : addTab === "alimentos" ? (
+              <FoodSearch
+                onSelect={(food) => setSelectedFood(food)}
+                placeholder="Buscar alimento para adicionar..."
+              />
+            ) : (
+              <RecipePicker onSelect={handleAddRecipe} />
+            )}
+
+            {/* Pending items */}
+            {pendingItems.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Itens a adicionar ({pendingItems.length})
+                </h3>
+                {pendingItems.map((item, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between rounded-xl bg-secondary p-3 text-sm"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="truncate font-medium">{item.name}</p>
+                      <p className="text-[11px] text-muted-foreground tabular-nums">
+                        {Math.round(item.portionGrams)}g
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="font-bold tabular-nums">
+                        {Math.round(item.energy_kcal)} kcal
+                      </span>
+                      <button
+                        onClick={() =>
+                          setPendingItems((prev) =>
+                            prev.filter((_, idx) => idx !== i)
+                          )
+                        }
+                        className="text-red-400 text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full hover:bg-red-400/10"
+                      >
+                        X
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between pt-2 border-t border-border/50">
+                  <span className="font-bold tabular-nums">
+                    Total: {Math.round(pendingTotal)} kcal
+                  </span>
+                  <Button
+                    onClick={handleSaveModule}
+                    className="rounded-xl h-10 px-6 font-semibold"
+                  >
+                    Salvar
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
 
       <BottomNav />
     </div>
