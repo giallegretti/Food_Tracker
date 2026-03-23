@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { Badge } from "@/components/ui/badge";
@@ -8,14 +8,24 @@ import { Button } from "@/components/ui/button";
 import { MODULE_LABELS, MODULE_ORDER } from "@/lib/constants";
 import Link from "next/link";
 import { useState } from "react";
+import { Id } from "../../../convex/_generated/dataModel";
 
 export default function ReceitasPage() {
   const [filterModule, setFilterModule] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Id<"recipes"> | null>(
+    null
+  );
 
   const recipes = useQuery(
     api.recipes.list,
     filterModule ? { module: filterModule } : {}
   );
+  const removeRecipe = useMutation(api.recipes.remove);
+
+  const handleDelete = async (id: Id<"recipes">) => {
+    await removeRecipe({ id });
+    setConfirmDelete(null);
+  };
 
   return (
     <div className="min-h-screen pb-24">
@@ -24,7 +34,10 @@ export default function ReceitasPage() {
           <div className="flex items-center justify-between">
             <h1 className="text-base font-bold tracking-tight">Receitas</h1>
             <Link href="/receitas/nova">
-              <Button size="sm" className="rounded-xl h-8 px-3 text-xs font-semibold">
+              <Button
+                size="sm"
+                className="rounded-xl h-8 px-3 text-xs font-semibold"
+              >
                 + Nova
               </Button>
             </Link>
@@ -63,7 +76,9 @@ export default function ReceitasPage() {
           </div>
         ) : recipes.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-muted-foreground">Nenhuma receita encontrada</p>
+            <p className="text-muted-foreground">
+              Nenhuma receita encontrada
+            </p>
             <p className="text-xs text-muted-foreground/60 mt-1">
               Crie receitas para logar refeicoes mais rapido
             </p>
@@ -79,20 +94,45 @@ export default function ReceitasPage() {
                   <h3 className="text-sm font-semibold">{recipe.name}</h3>
                   <div className="flex items-center gap-1.5">
                     {recipe.isPreBuilt && (
-                      <Badge variant="outline" className="text-[9px] rounded-md">
+                      <Badge
+                        variant="outline"
+                        className="text-[9px] rounded-md"
+                      >
                         Pre-montada
                       </Badge>
                     )}
                     {recipe.module && (
-                      <Badge variant="secondary" className="text-[9px] rounded-md">
+                      <Badge
+                        variant="secondary"
+                        className="text-[9px] rounded-md"
+                      >
                         {MODULE_LABELS[recipe.module]}
                       </Badge>
                     )}
                   </div>
                 </div>
-                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+
+                {/* Items preview */}
+                <div className="space-y-0.5">
+                  {recipe.items.map((item, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between text-[11px] text-muted-foreground"
+                    >
+                      <span className="truncate flex-1">{item.name}</span>
+                      <span className="ml-2 shrink-0 tabular-nums">
+                        {Math.round(item.portionGrams)}g ·{" "}
+                        {Math.round(item.energy_kcal)} kcal
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Totals */}
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1 border-t border-border/30">
                   <span>
-                    {recipe.items.length} {recipe.items.length === 1 ? "item" : "itens"}
+                    {recipe.items.length}{" "}
+                    {recipe.items.length === 1 ? "item" : "itens"}
                   </span>
                   <div className="flex gap-3 tabular-nums">
                     <span className="font-bold text-foreground">
@@ -102,6 +142,42 @@ export default function ReceitasPage() {
                     <span>C:{recipe.totalCarbs.toFixed(1)}</span>
                     <span>G:{recipe.totalFat.toFixed(1)}</span>
                   </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-2 pt-1">
+                  <Link
+                    href={`/receitas/editar?id=${recipe._id}`}
+                    className="text-[11px] font-medium text-primary hover:text-primary/80"
+                  >
+                    Editar
+                  </Link>
+                  {confirmDelete === recipe._id ? (
+                    <div className="flex items-center gap-2 ml-auto">
+                      <span className="text-[11px] text-muted-foreground">
+                        Confirmar?
+                      </span>
+                      <button
+                        onClick={() => handleDelete(recipe._id)}
+                        className="text-[11px] font-medium text-red-400 hover:text-red-500"
+                      >
+                        Sim, deletar
+                      </button>
+                      <button
+                        onClick={() => setConfirmDelete(null)}
+                        className="text-[11px] font-medium text-muted-foreground hover:text-foreground"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDelete(recipe._id)}
+                      className="text-[11px] font-medium text-red-400/70 hover:text-red-400 ml-auto"
+                    >
+                      Deletar
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

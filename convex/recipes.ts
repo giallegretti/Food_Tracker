@@ -59,6 +59,31 @@ export const create = mutation({
   },
 });
 
+export const update = mutation({
+  args: {
+    id: v.id("recipes"),
+    name: v.string(),
+    module: v.optional(v.string()),
+    items: v.array(recipeItemValidator),
+  },
+  handler: async (ctx, args) => {
+    const totalKcal = args.items.reduce((s, i) => s + i.energy_kcal, 0);
+    const totalProtein = args.items.reduce((s, i) => s + i.protein_g, 0);
+    const totalCarbs = args.items.reduce((s, i) => s + i.carbs_g, 0);
+    const totalFat = args.items.reduce((s, i) => s + i.lipids_g, 0);
+
+    await ctx.db.patch(args.id, {
+      name: args.name,
+      module: args.module,
+      items: args.items,
+      totalKcal,
+      totalProtein,
+      totalCarbs,
+      totalFat,
+    });
+  },
+});
+
 export const remove = mutation({
   args: { id: v.id("recipes") },
   handler: async (ctx, args) => {
