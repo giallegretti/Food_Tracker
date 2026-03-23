@@ -2,7 +2,6 @@
 
 import { useState, useCallback, Suspense } from "react";
 import { useQuery, useMutation } from "convex/react";
-import { useSearchParams } from "next/navigation";
 import { api } from "../../../convex/_generated/api";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { UserSwitcher } from "@/components/layout/UserSwitcher";
@@ -18,58 +17,15 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { MODULE_ORDER, MODULE_LABELS, getTodayISO, formatKcal } from "@/lib/constants";
+import {
+  MODULE_ORDER,
+  MODULE_LABELS,
+  getTodayISO,
+  formatKcal,
+} from "@/lib/constants";
 import { Doc } from "../../../convex/_generated/dataModel";
 
-const MODULE_EMOJI: Record<string, string> = {
-  cafeDaManha: "☕",
-  almoco: "🍱",
-  lanche: "🍌",
-  jantar: "🍽️",
-  doce: "🍫",
-  extra: "➕",
-};
-
-/* ---------- Expanded day: module-level breakdown ---------- */
-function DayModuleBreakdown({ userId, date }: { userId: string; date: string }) {
-  const totals = useQuery(api.dailyLog.getDailyTotals, { userId, date });
-
-  if (!totals) {
-    return (
-      <div className="py-2 text-xs text-muted-foreground animate-pulse">
-        Carregando...
-      </div>
-    );
-  }
-
-  const modules = [...MODULE_ORDER, "extra" as const];
-  const hasAny = modules.some((mod) => (totals.byModule[mod]?.kcal || 0) > 0);
-  if (!hasAny) return null;
-
-  return (
-    <div className="space-y-1.5 pt-2 pb-1">
-      {modules.map((mod) => {
-        const modKcal = totals.byModule[mod]?.kcal || 0;
-        if (modKcal === 0) return null;
-        return (
-          <div
-            key={mod}
-            className="flex items-center justify-between text-xs px-1"
-          >
-            <span className="text-muted-foreground">
-              {MODULE_EMOJI[mod]} {MODULE_LABELS[mod] || "Extra"}
-            </span>
-            <span className="tabular-nums text-muted-foreground">
-              {Math.round(modKcal)} kcal
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-/* ---------- Helper: group dates by month ---------- */
+/* ---------- Types ---------- */
 type DaySummary = {
   date: string;
   totalKcal: number;
@@ -78,40 +34,141 @@ type DaySummary = {
   totalFat: number;
 };
 
-function groupByMonth(
-  dates: DaySummary[]
-): Array<{ monthKey: string; label: string; days: DaySummary[] }> {
-  const groups = new Map<string, DaySummary[]>();
+type MacroTargets = {
+  kcal: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+};
 
-  for (const entry of dates) {
-    const monthKey = entry.date.substring(0, 7);
-    if (!groups.has(monthKey)) {
-      groups.set(monthKey, []);
-    }
-    groups.get(monthKey)!.push(entry);
-  }
+/* ---------- Day summary card (reusable) ---------- */
+function DaySummaryCard({
+  day,
+  targets,
+  dateLabel,
+  onClick,
+}: {
+  day: DaySummary;
+  targets: MacroTargets;
+  dateLabel: string;
+  onClick: () => void;
+}) {
+  const isOver = day.totalKcal > targets.kcal;
 
-  return Array.from(groups.entries())
-    .sort((a, b) => b[0].localeCompare(a[0]))
-    .map(([monthKey, days]) => {
-      const d = new Date(monthKey + "-15T12:00:00");
-      const label = d.toLocaleDateString("pt-BR", {
-        month: "long",
-        year: "numeric",
-      });
-      return { monthKey, label, days };
-    });
+  const macros = [
+    {
+      label: "Proteina",
+      value: day.totalProtein,
+      target: targets.protein,
+      color: "oklch(0.7 0.15 250)",
+    },
+    {
+      label: "Carbos",
+      value: day.totalCarbs,
+      target: targets.carbs,
+      color: "oklch(0.75 0.17 70)",
+    },
+    {
+      label: "Gordura",
+      value: day.totalFat,
+      target: targets.fat,
+      color: "oklch(0.72 0.16 330)",
+    },
+  ];
+
+  return (
+    <button
+      onClick={onClick}
+      className="w-full rounded-2xl bg-card p-4 space-y-3 text-left transition-colors hover:ring-1 hover:ring-border/50 active:scale-[0.99]"
+    >
+      {/* Date + status */}
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-muted-foreground capitalize">
+          {dateLabel}
+        </span>
+        <span
+          className={`inline-block w-2.5 h-2.5 rounded-full ${
+            isOver ? "bg-red-400" : "bg-emerald-500"
+          }`}
+        />
+      </div>
+
+      {/* Calories */}
+      <div className="flex items-baseline justify-between">
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-2xl font-bold tabular-nums">
+            {formatKcal(day.totalKcal)}
+          </span>
+          <span className="text-sm text-muted-foreground">
+            / {formatKcal(targets.kcal)} kcal
+          </span>
+        </div>
+        {day.totalKcal <= targets.kcal ? (
+          <span className="text-xs font-medium text-emerald-500 tabular-nums">
+            -{Math.round(targets.kcal - day.totalKcal)}
+          </span>
+        ) : (
+          <span className="text-xs font-medium text-red-400 tabular-nums">
+            +{Math.round(day.totalKcal - targets.kcal)}
+          </span>
+        )}
+      </div>
+
+      {/* Macro bars */}
+      <div className="grid grid-cols-3 gap-3">
+        {macros.map((macro) => {
+          const pct =
+            macro.target > 0
+              ? Math.min((macro.value / macro.target) * 100, 100)
+              : 0;
+          return (
+            <div key={macro.label} className="space-y-1">
+              <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+                {macro.label}
+              </span>
+              <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${pct}%`,
+                    backgroundColor: macro.color,
+                  }}
+                />
+              </div>
+              <div className="text-[11px] tabular-nums text-muted-foreground">
+                {Math.round(macro.value)}
+                <span className="text-muted-foreground/50">
+                  /{Math.round(macro.target)}g
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </button>
+  );
 }
 
-/* ---------- Main content ---------- */
-function DiarioContent() {
-  const searchParams = useSearchParams();
-  const { userId, setUserId } = useCurrentUser();
+/* ---------- Day editor (sheet content) ---------- */
+function DayEditor({
+  userId,
+  date,
+  profile,
+  onClose,
+}: {
+  userId: string;
+  date: string;
+  profile: Doc<"userProfiles">;
+  onClose: () => void;
+}) {
   const today = getTodayISO();
+  const entries = useQuery(api.dailyLog.getByDate, { userId, date });
+  const totals = useQuery(api.dailyLog.getDailyTotals, { userId, date });
 
-  const [activeModule, setActiveModule] = useState<string | null>(
-    searchParams.get("modulo")
-  );
+  const addEntry = useMutation(api.dailyLog.addEntry);
+  const deleteEntry = useMutation(api.dailyLog.deleteEntry);
+
+  const [activeModule, setActiveModule] = useState<string | null>(null);
   const [addTab, setAddTab] = useState<"alimentos" | "receitas">("alimentos");
   const [selectedFood, setSelectedFood] = useState<Doc<"foods"> | null>(null);
   const [pendingItems, setPendingItems] = useState<
@@ -125,17 +182,6 @@ function DiarioContent() {
       lipids_g: number;
     }>
   >([]);
-  const [expandedDay, setExpandedDay] = useState<string | null>(null);
-
-  const profile = useQuery(api.userProfiles.getByUserId, { userId });
-  const entries = useQuery(api.dailyLog.getByDate, { userId, date: today });
-  const totals = useQuery(api.dailyLog.getDailyTotals, { userId, date: today });
-  const datesWithEntries = useQuery(api.dailyLog.getDatesWithEntries, {
-    userId,
-  });
-
-  const addEntry = useMutation(api.dailyLog.addEntry);
-  const deleteEntry = useMutation(api.dailyLog.deleteEntry);
 
   const handleAddFood = useCallback(
     (food: Doc<"foods">, grams: number) => {
@@ -175,168 +221,233 @@ function DiarioContent() {
     if (!activeModule || pendingItems.length === 0) return;
     await addEntry({
       userId,
-      date: today,
+      date,
       module: activeModule,
       items: pendingItems,
     });
     setPendingItems([]);
     setActiveModule(null);
-  }, [activeModule, pendingItems, userId, today, addEntry]);
+  }, [activeModule, pendingItems, userId, date, addEntry]);
 
-  if (!profile || totals === undefined) {
+  if (!totals || !entries) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-muted-foreground animate-pulse">Carregando...</div>
+      <div className="flex items-center justify-center py-12">
+        <span className="text-muted-foreground animate-pulse">
+          Carregando...
+        </span>
       </div>
     );
   }
 
   const moduleItemCount: Record<string, number> = {};
-  if (entries) {
-    for (const entry of entries) {
-      moduleItemCount[entry.module] =
-        (moduleItemCount[entry.module] || 0) + entry.items.length;
-    }
+  for (const entry of entries) {
+    moduleItemCount[entry.module] =
+      (moduleItemCount[entry.module] || 0) + entry.items.length;
   }
 
   const pendingTotal = pendingItems.reduce((s, i) => s + i.energy_kcal, 0);
+  const isEditable = date <= today;
 
-  const formattedToday = new Date(today + "T12:00:00").toLocaleDateString(
+  const formattedDate = new Date(date + "T12:00:00").toLocaleDateString(
     "pt-BR",
-    { weekday: "long", day: "numeric", month: "short" }
+    { weekday: "long", day: "numeric", month: "long" }
   );
 
-  const targetKcal = profile.targetKcal;
-
-  // Macro targets in grams (from % of target calories)
-  const targetProtein = (targetKcal * profile.proteinPct) / 100 / 4;
-  const targetCarbs = (targetKcal * profile.carbsPct) / 100 / 4;
-  const targetFat = (targetKcal * profile.fatPct) / 100 / 9;
-
-  // History: exclude today, group by month
-  const pastDates = (datesWithEntries || []).filter((d) => d.date !== today);
-  const months = groupByMonth(pastDates);
-
-  return (
-    <div className="min-h-screen pb-24">
-      {/* Header */}
-      <div className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl safe-top">
-        <div className="mx-auto flex max-w-md items-center justify-between px-4 py-3">
-          <div className="flex-1">
-            <h1 className="text-base font-bold tracking-tight">Diario</h1>
-            <p className="text-[11px] text-muted-foreground capitalize mt-0.5">
-              {formattedToday}
-            </p>
-          </div>
-          <UserSwitcher userId={userId} onSwitch={setUserId} />
-        </div>
-      </div>
-
-      <div className="mx-auto max-w-md px-4 space-y-3">
-        {/* Daily summary card */}
-        <div className="rounded-2xl bg-card p-4 space-y-3">
-          {/* Calories - main number */}
-          <div className="flex items-baseline justify-between">
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold tabular-nums">
-                {formatKcal(totals.kcal)}
-              </span>
-              <span className="text-sm text-muted-foreground">
-                / {formatKcal(targetKcal)} kcal
-              </span>
-            </div>
-            {totals.kcal <= targetKcal ? (
-              <span className="text-xs font-medium text-emerald-500 tabular-nums">
-                -{Math.round(targetKcal - totals.kcal)}
-              </span>
-            ) : (
-              <span className="text-xs font-medium text-red-400 tabular-nums">
-                +{Math.round(totals.kcal - targetKcal)}
+  // If adding food to a module, show the food picker
+  if (activeModule !== null) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-semibold">
+            {MODULE_LABELS[activeModule] || "Extra"}
+            {activeModule !== "extra" && profile && (
+              <span className="text-xs font-normal text-muted-foreground ml-2">
+                Meta:{" "}
+                {Math.round(
+                  profile.modules[
+                    activeModule as keyof typeof profile.modules
+                  ] || 0
+                )}{" "}
+                kcal
               </span>
             )}
-          </div>
-
-          {/* Macro bars */}
-          <div className="grid grid-cols-3 gap-3">
-            {([
-              { label: "Proteina", value: totals.protein, target: targetProtein, color: "oklch(0.7 0.15 250)" },
-              { label: "Carbos", value: totals.carbs, target: targetCarbs, color: "oklch(0.75 0.17 70)" },
-              { label: "Gordura", value: totals.fat, target: targetFat, color: "oklch(0.72 0.16 330)" },
-            ] as const).map((macro) => {
-              const pct = macro.target > 0 ? Math.min((macro.value / macro.target) * 100, 100) : 0;
-              return (
-                <div key={macro.label} className="space-y-1">
-                  <div className="flex items-baseline justify-between">
-                    <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
-                      {macro.label}
-                    </span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all duration-500"
-                      style={{ width: `${pct}%`, backgroundColor: macro.color }}
-                    />
-                  </div>
-                  <div className="text-[11px] tabular-nums text-muted-foreground">
-                    {Math.round(macro.value)}
-                    <span className="text-muted-foreground/50">
-                      /{Math.round(macro.target)}g
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          </h3>
+          <button
+            onClick={() => {
+              setActiveModule(null);
+              setPendingItems([]);
+              setSelectedFood(null);
+            }}
+            className="text-sm text-muted-foreground hover:text-foreground"
+          >
+            Voltar
+          </button>
         </div>
 
-        {/* Module cards with entries — always today */}
-        {MODULE_ORDER.map((mod) => (
-          <div key={mod} className="space-y-0">
-            <ModuleCard
-              module={mod}
-              consumed={totals.byModule[mod]?.kcal || 0}
-              budget={profile.modules[mod]}
-              itemCount={moduleItemCount[mod]}
-              onClick={() => {
-                setActiveModule(mod);
-                setPendingItems([]);
-                setAddTab("alimentos");
-              }}
-            />
+        {/* Tab switcher */}
+        {!selectedFood && (
+          <div className="flex gap-1 rounded-xl bg-secondary p-1">
+            <button
+              onClick={() => setAddTab("alimentos")}
+              className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
+                addTab === "alimentos"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground"
+              }`}
+            >
+              Alimentos
+            </button>
+            <button
+              onClick={() => setAddTab("receitas")}
+              className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
+                addTab === "receitas"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground"
+              }`}
+            >
+              Receitas
+            </button>
+          </div>
+        )}
 
-            {entries
-              ?.filter((e) => e.module === mod)
-              .map((entry) => (
-                <div
-                  key={entry._id}
-                  className="ml-10 border-l border-border/40 pl-3 py-1.5"
-                >
-                  {entry.items.map((item, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center justify-between text-xs py-0.5"
-                    >
-                      <span className="truncate flex-1 text-muted-foreground">
-                        {item.name}
-                      </span>
-                      <span className="text-muted-foreground/70 ml-2 shrink-0 tabular-nums">
-                        {Math.round(item.portionGrams)}g ·{" "}
-                        {Math.round(item.energy_kcal)} kcal
-                      </span>
-                    </div>
-                  ))}
+        {selectedFood ? (
+          <PortionInput
+            food={selectedFood}
+            onConfirm={handleAddFood}
+            onCancel={() => setSelectedFood(null)}
+          />
+        ) : addTab === "alimentos" ? (
+          <FoodSearch
+            onSelect={(food) => setSelectedFood(food)}
+            placeholder="Buscar alimento para adicionar..."
+          />
+        ) : (
+          <RecipePicker onSelect={handleAddRecipe} />
+        )}
+
+        {/* Pending items */}
+        {pendingItems.length > 0 && (
+          <div className="space-y-2">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Itens a adicionar ({pendingItems.length})
+            </h3>
+            {pendingItems.map((item, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between rounded-xl bg-secondary p-3 text-sm"
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="truncate font-medium">{item.name}</p>
+                  <p className="text-[11px] text-muted-foreground tabular-nums">
+                    {Math.round(item.portionGrams)}g
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="font-bold tabular-nums">
+                    {Math.round(item.energy_kcal)} kcal
+                  </span>
+                  <button
+                    onClick={() =>
+                      setPendingItems((prev) =>
+                        prev.filter((_, idx) => idx !== i)
+                      )
+                    }
+                    className="text-red-400 text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full hover:bg-red-400/10"
+                  >
+                    X
+                  </button>
+                </div>
+              </div>
+            ))}
+            <div className="flex items-center justify-between pt-2 border-t border-border/50">
+              <span className="font-bold tabular-nums">
+                Total: {Math.round(pendingTotal)} kcal
+              </span>
+              <Button
+                onClick={handleSaveModule}
+                className="rounded-xl h-10 px-6 font-semibold"
+              >
+                Salvar
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Default: show day overview with modules
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground capitalize">
+        {formattedDate}
+      </p>
+
+      {/* Day total */}
+      <div className="flex items-baseline gap-1.5">
+        <span className="text-xl font-bold tabular-nums">
+          {formatKcal(totals.kcal)}
+        </span>
+        <span className="text-sm text-muted-foreground">
+          / {formatKcal(profile.targetKcal)} kcal
+        </span>
+      </div>
+
+      {/* Module cards with entries */}
+      {MODULE_ORDER.map((mod) => (
+        <div key={mod} className="space-y-0">
+          <ModuleCard
+            module={mod}
+            consumed={totals.byModule[mod]?.kcal || 0}
+            budget={profile.modules[mod]}
+            itemCount={moduleItemCount[mod]}
+            onClick={
+              isEditable
+                ? () => {
+                    setActiveModule(mod);
+                    setPendingItems([]);
+                    setAddTab("alimentos");
+                  }
+                : undefined
+            }
+          />
+
+          {entries
+            ?.filter((e) => e.module === mod)
+            .map((entry) => (
+              <div
+                key={entry._id}
+                className="ml-10 border-l border-border/40 pl-3 py-1.5"
+              >
+                {entry.items.map((item, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between text-xs py-0.5"
+                  >
+                    <span className="truncate flex-1 text-muted-foreground">
+                      {item.name}
+                    </span>
+                    <span className="text-muted-foreground/70 ml-2 shrink-0 tabular-nums">
+                      {Math.round(item.portionGrams)}g ·{" "}
+                      {Math.round(item.energy_kcal)} kcal
+                    </span>
+                  </div>
+                ))}
+                {isEditable && (
                   <button
                     onClick={() => deleteEntry({ id: entry._id })}
                     className="text-[11px] text-red-400/70 hover:text-red-400 mt-0.5 font-medium"
                   >
                     Remover
                   </button>
-                </div>
-              ))}
-          </div>
-        ))}
+                )}
+              </div>
+            ))}
+        </div>
+      ))}
 
-        {/* Extra food button */}
+      {/* Extra food button */}
+      {isEditable && (
         <Button
           variant="secondary"
           className="w-full h-11 rounded-xl"
@@ -348,282 +459,167 @@ function DiarioContent() {
         >
           + Adicionar alimento extra
         </Button>
+      )}
+    </div>
+  );
+}
 
-        {/* ===== COMPACT HISTORY ===== */}
-        {months.length > 0 && (
-          <div className="pt-6 space-y-5">
-            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Historico
-            </h2>
+/* ---------- Helper: group dates by month ---------- */
+function groupByMonth(
+  dates: DaySummary[]
+): Array<{ monthKey: string; label: string; days: DaySummary[] }> {
+  const groups = new Map<string, DaySummary[]>();
 
-            {months.map(({ monthKey, label, days }) => {
-              const daysWithin = days.filter(
-                (d) => d.totalKcal <= targetKcal
-              ).length;
-              const daysOver = days.length - daysWithin;
+  for (const entry of dates) {
+    const monthKey = entry.date.substring(0, 7);
+    if (!groups.has(monthKey)) {
+      groups.set(monthKey, []);
+    }
+    groups.get(monthKey)!.push(entry);
+  }
 
-              return (
-                <div key={monthKey} className="space-y-1.5">
-                  {/* Month header */}
-                  <div className="flex items-center justify-between px-1 pb-1">
-                    <h3 className="text-sm font-semibold capitalize">
-                      {label}
-                    </h3>
-                    <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-                      <span>
-                        {days.length} {days.length === 1 ? "dia" : "dias"}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
-                        {daysWithin}
-                      </span>
-                      {daysOver > 0 && (
-                        <span className="flex items-center gap-1">
-                          <span className="inline-block w-2 h-2 rounded-full bg-red-400" />
-                          {daysOver}
-                        </span>
-                      )}
-                    </div>
-                  </div>
+  return Array.from(groups.entries())
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([monthKey, days]) => {
+      const d = new Date(monthKey + "-15T12:00:00");
+      const label = d.toLocaleDateString("pt-BR", {
+        month: "long",
+        year: "numeric",
+      });
+      return { monthKey, label, days };
+    });
+}
 
-                  {/* Day rows */}
-                  <div className="space-y-1">
-                    {days.map(({ date, totalKcal, totalProtein, totalCarbs, totalFat }) => {
-                      const isExpanded = expandedDay === date;
-                      const isOver = totalKcal > targetKcal;
-                      const pct =
-                        targetKcal > 0 ? totalKcal / targetKcal : 0;
-                      const dateLabel = new Date(
-                        date + "T12:00:00"
-                      ).toLocaleDateString("pt-BR", {
-                        weekday: "short",
-                        day: "numeric",
-                      });
-                      const proteinPct = targetProtein > 0 ? totalProtein / targetProtein : 0;
+/* ---------- Main content ---------- */
+function DiarioContent() {
+  const { userId, setUserId } = useCurrentUser();
+  const today = getTodayISO();
 
-                      return (
-                        <div key={date}>
-                          <button
-                            onClick={() =>
-                              setExpandedDay(isExpanded ? null : date)
-                            }
-                            className={`w-full rounded-xl px-3 py-2.5 text-sm transition-colors ${
-                              isExpanded
-                                ? "bg-card ring-1 ring-border/50"
-                                : "bg-card/50 hover:bg-card"
-                            }`}
-                          >
-                            {/* Row 1: date + calorie bar + kcal */}
-                            <div className="flex items-center gap-3">
-                              {/* Status dot */}
-                              <span
-                                className={`shrink-0 w-2.5 h-2.5 rounded-full ${
-                                  isOver ? "bg-red-400" : "bg-emerald-500"
-                                }`}
-                              />
-                              {/* Date */}
-                              <span className="capitalize text-left min-w-[68px]">
-                                {dateLabel}
-                              </span>
-                              {/* Mini calorie bar */}
-                              <div className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden">
-                                <div
-                                  className="h-full rounded-full transition-all"
-                                  style={{
-                                    width: `${Math.min(pct * 100, 100)}%`,
-                                    backgroundColor: isOver
-                                      ? "oklch(0.65 0.2 25)"
-                                      : pct > 0.8
-                                        ? "oklch(0.75 0.17 70)"
-                                        : "oklch(0.72 0.19 155)",
-                                  }}
-                                />
-                              </div>
-                              {/* Kcal numbers */}
-                              <span className="tabular-nums text-xs text-muted-foreground shrink-0">
-                                {formatKcal(totalKcal)}
-                                <span className="text-muted-foreground/50">
-                                  {" "}
-                                  / {formatKcal(targetKcal)}
-                                </span>
-                              </span>
-                              {/* Chevron */}
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="14"
-                                height="14"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                className={`shrink-0 text-muted-foreground/50 transition-transform ${
-                                  isExpanded ? "rotate-180" : ""
-                                }`}
-                              >
-                                <path d="m6 9 6 6 6-6" />
-                              </svg>
-                            </div>
-                            {/* Row 2: macro summary */}
-                            <div className="flex items-center gap-3 mt-1.5 ml-[22px]">
-                              <span className={`text-[10px] tabular-nums font-medium ${
-                                proteinPct >= 0.9 ? "text-emerald-500" : proteinPct >= 0.7 ? "text-muted-foreground" : "text-red-400/80"
-                              }`}>
-                                P {Math.round(totalProtein)}g
-                              </span>
-                              <span className="text-[10px] tabular-nums text-muted-foreground/60">
-                                C {Math.round(totalCarbs)}g
-                              </span>
-                              <span className="text-[10px] tabular-nums text-muted-foreground/60">
-                                G {Math.round(totalFat)}g
-                              </span>
-                            </div>
-                          </button>
+  const [editingDate, setEditingDate] = useState<string | null>(null);
 
-                          {/* Expanded module breakdown */}
-                          {isExpanded && (
-                            <div className="mx-3 border-l-2 border-border/40 pl-4 ml-4">
-                              <DayModuleBreakdown
-                                userId={userId}
-                                date={date}
-                              />
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
+  const profile = useQuery(api.userProfiles.getByUserId, { userId });
+  const datesWithEntries = useQuery(api.dailyLog.getDatesWithEntries, {
+    userId,
+  });
+
+  if (!profile) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-muted-foreground animate-pulse">Carregando...</div>
+      </div>
+    );
+  }
+
+  const targetKcal = profile.targetKcal;
+  const targets: MacroTargets = {
+    kcal: targetKcal,
+    protein: (targetKcal * profile.proteinPct) / 100 / 4,
+    carbs: (targetKcal * profile.carbsPct) / 100 / 4,
+    fat: (targetKcal * profile.fatPct) / 100 / 9,
+  };
+
+  const allDates = datesWithEntries || [];
+  const months = groupByMonth(allDates);
+
+  return (
+    <div className="min-h-screen pb-24">
+      {/* Header */}
+      <div className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl safe-top">
+        <div className="mx-auto flex max-w-md items-center justify-between px-4 py-3">
+          <div className="flex-1">
+            <h1 className="text-base font-bold tracking-tight">Diario</h1>
           </div>
-        )}
+          <UserSwitcher userId={userId} onSwitch={setUserId} />
+        </div>
       </div>
 
-      {/* Add food sheet */}
+      <div className="mx-auto max-w-md px-4 space-y-5">
+        {months.length === 0 && (
+          <div className="text-center py-12 text-muted-foreground text-sm">
+            Nenhum registro ainda.
+          </div>
+        )}
+
+        {months.map(({ monthKey, label, days }) => {
+          const daysWithin = days.filter(
+            (d) => d.totalKcal <= targetKcal
+          ).length;
+          const daysOver = days.length - daysWithin;
+          const avgProtein =
+            days.reduce((s, d) => s + d.totalProtein, 0) / days.length;
+
+          return (
+            <div key={monthKey} className="space-y-3">
+              {/* Month header */}
+              <div className="flex items-center justify-between px-1">
+                <h2 className="text-sm font-semibold capitalize">{label}</h2>
+                <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                  <span>
+                    {days.length} {days.length === 1 ? "dia" : "dias"}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+                    {daysWithin}
+                  </span>
+                  {daysOver > 0 && (
+                    <span className="flex items-center gap-1">
+                      <span className="inline-block w-2 h-2 rounded-full bg-red-400" />
+                      {daysOver}
+                    </span>
+                  )}
+                  <span>
+                    P {Math.round(avgProtein)}g/dia
+                  </span>
+                </div>
+              </div>
+
+              {/* Day cards */}
+              {days.map((day) => {
+                const isToday = day.date === today;
+                const dateLabel = isToday
+                  ? "Hoje"
+                  : new Date(day.date + "T12:00:00").toLocaleDateString(
+                      "pt-BR",
+                      { weekday: "long", day: "numeric", month: "short" }
+                    );
+
+                return (
+                  <DaySummaryCard
+                    key={day.date}
+                    day={day}
+                    targets={targets}
+                    dateLabel={dateLabel}
+                    onClick={() => setEditingDate(day.date)}
+                  />
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Day editor sheet */}
       <Sheet
-        open={activeModule !== null}
+        open={editingDate !== null}
         onOpenChange={(open) => {
-          if (!open) {
-            setActiveModule(null);
-            setPendingItems([]);
-            setSelectedFood(null);
-            setAddTab("alimentos");
-          }
+          if (!open) setEditingDate(null);
         }}
       >
         <SheetContent
           side="bottom"
-          className="h-[85vh] rounded-t-2xl border-t border-border/50"
+          className="h-[90vh] rounded-t-2xl border-t border-border/50"
         >
           <SheetHeader>
-            <SheetTitle className="text-left">
-              {activeModule
-                ? MODULE_LABELS[activeModule] || "Extra"
-                : "Adicionar"}
-              {activeModule && activeModule !== "extra" && profile && (
-                <span className="text-xs font-normal text-muted-foreground ml-2">
-                  Meta:{" "}
-                  {Math.round(
-                    profile.modules[
-                      activeModule as keyof typeof profile.modules
-                    ] || 0
-                  )}{" "}
-                  kcal
-                </span>
-              )}
-            </SheetTitle>
+            <SheetTitle className="text-left">Detalhes do dia</SheetTitle>
           </SheetHeader>
-
-          <div className="mt-4 space-y-4 overflow-y-auto max-h-[calc(85vh-140px)]">
-            {/* Tab switcher */}
-            {!selectedFood && (
-              <div className="flex gap-1 rounded-xl bg-secondary p-1">
-                <button
-                  onClick={() => setAddTab("alimentos")}
-                  className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
-                    addTab === "alimentos"
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground"
-                  }`}
-                >
-                  Alimentos
-                </button>
-                <button
-                  onClick={() => setAddTab("receitas")}
-                  className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
-                    addTab === "receitas"
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground"
-                  }`}
-                >
-                  Receitas
-                </button>
-              </div>
-            )}
-
-            {selectedFood ? (
-              <PortionInput
-                food={selectedFood}
-                onConfirm={handleAddFood}
-                onCancel={() => setSelectedFood(null)}
+          <div className="mt-4 overflow-y-auto max-h-[calc(90vh-80px)]">
+            {editingDate && (
+              <DayEditor
+                userId={userId}
+                date={editingDate}
+                profile={profile}
+                onClose={() => setEditingDate(null)}
               />
-            ) : addTab === "alimentos" ? (
-              <FoodSearch
-                onSelect={(food) => setSelectedFood(food)}
-                placeholder="Buscar alimento para adicionar..."
-              />
-            ) : (
-              <RecipePicker onSelect={handleAddRecipe} />
-            )}
-
-            {/* Pending items */}
-            {pendingItems.length > 0 && (
-              <div className="space-y-2">
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Itens a adicionar ({pendingItems.length})
-                </h3>
-                {pendingItems.map((item, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between rounded-xl bg-secondary p-3 text-sm"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="truncate font-medium">{item.name}</p>
-                      <p className="text-[11px] text-muted-foreground tabular-nums">
-                        {Math.round(item.portionGrams)}g
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="font-bold tabular-nums">
-                        {Math.round(item.energy_kcal)} kcal
-                      </span>
-                      <button
-                        onClick={() =>
-                          setPendingItems((prev) =>
-                            prev.filter((_, idx) => idx !== i)
-                          )
-                        }
-                        className="text-red-400 text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full hover:bg-red-400/10"
-                      >
-                        X
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between pt-2 border-t border-border/50">
-                  <span className="font-bold tabular-nums">
-                    Total: {Math.round(pendingTotal)} kcal
-                  </span>
-                  <Button
-                    onClick={handleSaveModule}
-                    className="rounded-xl h-10 px-6 font-semibold"
-                  >
-                    Salvar
-                  </Button>
-                </div>
-              </div>
             )}
           </div>
         </SheetContent>
