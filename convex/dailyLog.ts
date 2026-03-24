@@ -70,7 +70,7 @@ export const getDailyTotals = query({
   },
 });
 
-// Add a log entry
+// Add a log entry (optionally also for another user)
 export const addEntry = mutation({
   args: {
     userId: v.string(),
@@ -79,6 +79,7 @@ export const addEntry = mutation({
     recipeId: v.optional(v.id("recipes")),
     items: v.array(logItemValidator),
     note: v.optional(v.string()),
+    alsoForUserId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const totalKcal = args.items.reduce((s, i) => s + i.energy_kcal, 0);
@@ -86,8 +87,7 @@ export const addEntry = mutation({
     const totalCarbs = args.items.reduce((s, i) => s + i.carbs_g, 0);
     const totalFat = args.items.reduce((s, i) => s + i.lipids_g, 0);
 
-    return await ctx.db.insert("dailyLogEntries", {
-      userId: args.userId,
+    const entry = {
       date: args.date,
       module: args.module,
       recipeId: args.recipeId,
@@ -97,7 +97,21 @@ export const addEntry = mutation({
       totalCarbs,
       totalFat,
       note: args.note,
+    };
+
+    const id = await ctx.db.insert("dailyLogEntries", {
+      userId: args.userId,
+      ...entry,
     });
+
+    if (args.alsoForUserId) {
+      await ctx.db.insert("dailyLogEntries", {
+        userId: args.alsoForUserId,
+        ...entry,
+      });
+    }
+
+    return id;
   },
 });
 

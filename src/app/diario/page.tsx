@@ -182,6 +182,9 @@ function DayEditor({
       lipids_g: number;
     }>
   >([]);
+  const [shareWithPartner, setShareWithPartner] = useState(false);
+  const partnerId = userId === "giovanna" ? "ricardo" : "giovanna";
+  const partnerName = partnerId === "ricardo" ? "Ricardo" : "Giovanna";
 
   const handleAddFood = useCallback(
     (food: Doc<"foods">, grams: number) => {
@@ -224,10 +227,12 @@ function DayEditor({
       date,
       module: activeModule,
       items: pendingItems,
+      alsoForUserId: shareWithPartner ? partnerId : undefined,
     });
     setPendingItems([]);
     setActiveModule(null);
-  }, [activeModule, pendingItems, userId, date, addEntry]);
+    setShareWithPartner(false);
+  }, [activeModule, pendingItems, userId, date, addEntry, shareWithPartner, partnerId]);
 
   if (!totals || !entries) {
     return (
@@ -359,6 +364,20 @@ function DayEditor({
                 </div>
               </div>
             ))}
+            {/* Share with partner toggle */}
+            <button
+              type="button"
+              onClick={() => setShareWithPartner((v) => !v)}
+              className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors w-full ${
+                shareWithPartner
+                  ? "bg-primary/10 text-primary ring-1 ring-primary/30"
+                  : "bg-secondary text-muted-foreground"
+              }`}
+            >
+              <span className="text-base">{shareWithPartner ? "✓" : "+"}</span>
+              <span>Também para {partnerName}</span>
+            </button>
+
             <div className="flex items-center justify-between pt-2 border-t border-border/50">
               <span className="font-bold tabular-nums">
                 Total: {Math.round(pendingTotal)} kcal
