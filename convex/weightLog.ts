@@ -69,12 +69,24 @@ export const addEntry = mutation({
       });
     }
 
-    // Also update the user profile weight
-    await ctx.db.patch(profile._id, {
-      weight_kg: args.weight_kg,
-      bmr,
-      tdee,
-      targetKcal,
-    });
+    // Only update profile if this is the most recent date entry
+    const allEntries = await ctx.db
+      .query("weightLog")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    const mostRecentDate = allEntries.reduce(
+      (max, e) => (e.date > max ? e.date : max),
+      ""
+    );
+
+    if (args.date >= mostRecentDate) {
+      await ctx.db.patch(profile._id, {
+        weight_kg: args.weight_kg,
+        bmr,
+        tdee,
+        targetKcal,
+      });
+    }
   },
 });
