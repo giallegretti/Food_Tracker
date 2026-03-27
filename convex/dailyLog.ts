@@ -115,6 +115,31 @@ export const addEntry = mutation({
   },
 });
 
+// Share an existing entry with another user (duplicate it)
+export const shareEntry = mutation({
+  args: {
+    entryId: v.id("dailyLogEntries"),
+    targetUserId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const entry = await ctx.db.get(args.entryId);
+    if (!entry) throw new Error("Entry not found");
+
+    return await ctx.db.insert("dailyLogEntries", {
+      userId: args.targetUserId,
+      date: entry.date,
+      module: entry.module,
+      recipeId: entry.recipeId,
+      items: entry.items,
+      totalKcal: entry.totalKcal,
+      totalProtein: entry.totalProtein,
+      totalCarbs: entry.totalCarbs,
+      totalFat: entry.totalFat,
+      note: entry.note,
+    });
+  },
+});
+
 // Delete a log entry
 export const deleteEntry = mutation({
   args: { id: v.id("dailyLogEntries") },

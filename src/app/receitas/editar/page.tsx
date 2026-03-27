@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { MODULE_ORDER, MODULE_LABELS } from "@/lib/constants";
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
+import type { FoodItem } from "@/components/food/FoodSearch";
 
 interface RecipeItem {
   foodId: Id<"foods">;
@@ -37,7 +38,7 @@ function EditarReceitaContent() {
   const [name, setName] = useState("");
   const [module, setModule] = useState<string | undefined>(undefined);
   const [items, setItems] = useState<RecipeItem[]>([]);
-  const [selectedFood, setSelectedFood] = useState<Doc<"foods"> | null>(null);
+  const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   // Load recipe data once
@@ -61,12 +62,12 @@ function EditarReceitaContent() {
   }, [recipe, loaded]);
 
   const handleAddFood = useCallback(
-    (food: Doc<"foods">, grams: number) => {
+    (food: FoodItem, grams: number) => {
       const factor = grams / 100;
       setItems((prev) => [
         ...prev,
         {
-          foodId: food._id,
+          foodId: food._id as Id<"foods">,
           name: food.name,
           portionGrams: grams,
           energy_kcal: food.energy_kcal * factor,

@@ -5,11 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { formatGrams } from "@/lib/constants";
 import { getHouseholdMeasures } from "@/lib/household-measures";
-import { Doc } from "../../../convex/_generated/dataModel";
+import type { FoodItem } from "./FoodSearch";
 
 interface PortionInputProps {
-  food: Doc<"foods">;
-  onConfirm: (food: Doc<"foods">, grams: number) => void;
+  food: FoodItem;
+  onConfirm: (food: FoodItem, grams: number) => void;
   onCancel: () => void;
   suggestedGrams?: number;
 }
@@ -49,9 +49,16 @@ export function PortionInput({
   return (
     <div className="rounded-xl bg-card p-4 space-y-4">
       <div>
-        <h3 className="text-base font-semibold">{food.name}</h3>
+        <h3 className="text-base font-semibold">
+          {food.name}
+          {food.isCustom && (
+            <span className="ml-1.5 text-[10px] font-medium text-primary/70 bg-primary/10 px-1.5 py-0.5 rounded-full align-middle">
+              personalizado
+            </span>
+          )}
+        </h3>
         <p className="text-[11px] text-muted-foreground">
-          {food.category} · {Math.round(food.energy_kcal)} kcal/100g
+          {food.category ? `${food.category} · ` : ""}{Math.round(food.energy_kcal)} kcal/100g
         </p>
       </div>
 

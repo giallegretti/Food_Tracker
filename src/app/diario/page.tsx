@@ -24,6 +24,7 @@ import {
   formatKcal,
 } from "@/lib/constants";
 import { Doc } from "../../../convex/_generated/dataModel";
+import type { FoodItem } from "@/components/food/FoodSearch";
 
 /* ---------- Types ---------- */
 type DaySummary = {
@@ -167,13 +168,15 @@ function DayEditor({
 
   const addEntry = useMutation(api.dailyLog.addEntry);
   const deleteEntry = useMutation(api.dailyLog.deleteEntry);
+  const shareEntry = useMutation(api.dailyLog.shareEntry);
+  const [sharedEntryId, setSharedEntryId] = useState<string | null>(null);
 
   const [activeModule, setActiveModule] = useState<string | null>(null);
   const [addTab, setAddTab] = useState<"alimentos" | "receitas">("alimentos");
-  const [selectedFood, setSelectedFood] = useState<Doc<"foods"> | null>(null);
+  const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null);
   const [pendingItems, setPendingItems] = useState<
     Array<{
-      foodId: Doc<"foods">["_id"];
+      foodId?: Doc<"foods">["_id"];
       name: string;
       portionGrams: number;
       energy_kcal: number;
@@ -187,12 +190,12 @@ function DayEditor({
   const partnerName = partnerId === "ricardo" ? "Ricardo" : "Giovanna";
 
   const handleAddFood = useCallback(
-    (food: Doc<"foods">, grams: number) => {
+    (food: FoodItem, grams: number) => {
       const factor = grams / 100;
       setPendingItems((prev) => [
         ...prev,
         {
-          foodId: food._id,
+          foodId: food.isCustom ? undefined : (food._id as Doc<"foods">["_id"]),
           name: food.name,
           portionGrams: grams,
           energy_kcal: food.energy_kcal * factor,
@@ -323,7 +326,7 @@ function DayEditor({
           />
         ) : addTab === "alimentos" ? (
           <FoodSearch
-            onSelect={(food) => setSelectedFood(food)}
+            onSelect={setSelectedFood}
             placeholder="Buscar alimento para adicionar..."
           />
         ) : (
@@ -453,12 +456,24 @@ function DayEditor({
                   </div>
                 ))}
                 {isEditable && (
-                  <button
-                    onClick={() => deleteEntry({ id: entry._id })}
-                    className="text-[11px] text-red-400/70 hover:text-red-400 mt-0.5 font-medium"
-                  >
-                    Remover
-                  </button>
+                  <div className="flex items-center gap-3 mt-0.5">
+                    <button
+                      onClick={async () => {
+                        await shareEntry({ entryId: entry._id, targetUserId: partnerId });
+                        setSharedEntryId(entry._id);
+                        setTimeout(() => setSharedEntryId(null), 2000);
+                      }}
+                      className="text-[11px] text-blue-400/70 hover:text-blue-400 font-medium"
+                    >
+                      {sharedEntryId === entry._id ? `✓ Enviado p/ ${partnerName}` : `Enviar p/ ${partnerName}`}
+                    </button>
+                    <button
+                      onClick={() => deleteEntry({ id: entry._id })}
+                      className="text-[11px] text-red-400/70 hover:text-red-400 font-medium"
+                    >
+                      Remover
+                    </button>
+                  </div>
                 )}
               </div>
             ))}
