@@ -417,14 +417,17 @@ function ProjecaoTab({
   const target = parseFloat(targetWeight.replace(",", "."));
   const isValidTarget = !isNaN(target) && target > 0 && target < currentWeight;
 
-  // Find earliest weight entry date as projection start
+  // Projection starts from the FIRST (oldest) weight entry
+  const startWeight = sortedHistory.length > 0
+    ? sortedHistory[0].weight_kg
+    : currentWeight;
   const startDate =
     sortedHistory.length > 0 ? sortedHistory[0].date : getTodayISO();
 
   const projections = useMemo(() => {
     if (!isValidTarget) return [];
     return buildProjection(
-      currentWeight,
+      startWeight,
       target,
       profile.height_cm,
       profile.age,
@@ -435,7 +438,7 @@ function ProjecaoTab({
       sortedHistory
     );
   }, [
-    currentWeight,
+    startWeight,
     profile.height_cm,
     profile.age,
     profile.sex,
@@ -511,7 +514,7 @@ function ProjecaoTab({
             </h2>
             <div className="flex items-baseline gap-2">
               <span className="text-2xl font-bold tabular-nums">
-                {formatGrams(currentWeight)}
+                {formatGrams(startWeight)}
               </span>
               <span className="text-muted-foreground">→</span>
               <span className="text-2xl font-bold text-primary tabular-nums">
@@ -603,19 +606,13 @@ function ProjecaoTab({
                           Sem {p.week}
                         </span>
                         <span className="text-sm font-bold tabular-nums">
-                          {formatGrams(p.weight)} kg
+                          {formatGrams(p.actualWeight ?? p.weight)} kg
                         </span>
-                        {p.actualWeight !== undefined && (
+                        {p.actualWeight !== undefined && p.actualWeight !== p.weight && (
                           <span
-                            className={`text-[11px] font-medium tabular-nums ${
-                              (p.deviationPct ?? 0) > 1
-                                ? "text-red-400"
-                                : (p.deviationPct ?? 0) < -1
-                                  ? "text-blue-400"
-                                  : "text-emerald-500"
-                            }`}
+                            className={`text-[10px] text-muted-foreground tabular-nums`}
                           >
-                            (real: {formatGrams(p.actualWeight)})
+                            proj: {formatGrams(p.weight)}
                           </span>
                         )}
                       </div>
