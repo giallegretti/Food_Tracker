@@ -42,6 +42,7 @@ export default function DashboardPage() {
     }>
   >([]);
   const [shareWithPartner, setShareWithPartner] = useState(false);
+  const [sharedModule, setSharedModule] = useState<string | null>(null);
   const partnerId = userId === "giovanna" ? "ricardo" : "giovanna";
   const partnerName = partnerId === "ricardo" ? "Ricardo" : "Giovanna";
 
@@ -50,9 +51,8 @@ export default function DashboardPage() {
   const entries = useQuery(api.dailyLog.getByDate, { userId, date: today });
 
   const addEntry = useMutation(api.dailyLog.addEntry);
-  const deleteEntry = useMutation(api.dailyLog.deleteEntry);
-  const shareEntry = useMutation(api.dailyLog.shareEntry);
-  const [sharedEntryId, setSharedEntryId] = useState<string | null>(null);
+  const removeItem = useMutation(api.dailyLog.removeItem);
+  const shareModuleEntries = useMutation(api.dailyLog.shareModuleEntries);
 
   const handleAddFood = useCallback(
     (food: FoodItem, grams: number) => {
@@ -98,9 +98,22 @@ export default function DashboardPage() {
       alsoForUserId: shareWithPartner ? partnerId : undefined,
     });
     setPendingItems([]);
-    setActiveModule(null);
     setShareWithPartner(false);
   }, [activeModule, pendingItems, userId, today, addEntry, shareWithPartner, partnerId]);
+
+  const handleShareModule = useCallback(
+    async (mod: string) => {
+      await shareModuleEntries({
+        userId,
+        date: today,
+        module: mod,
+        targetUserId: partnerId,
+      });
+      setSharedModule(mod);
+      setTimeout(() => setSharedModule(null), 2000);
+    },
+    [userId, today, partnerId, shareModuleEntries]
+  );
 
   if (!profile || totals === undefined) {
     return (
@@ -130,6 +143,28 @@ export default function DashboardPage() {
     "pt-BR",
     { weekday: "long", day: "numeric", month: "short" }
   );
+
+  // Get registered items for the active module
+  const activeModuleEntries = entries?.filter((e) => e.module === activeModule) ?? [];
+  const registeredItems: Array<{
+    entryId: Doc<"dailyLogEntries">["_id"];
+    itemIndex: number;
+    name: string;
+    portionGrams: number;
+    energy_kcal: number;
+  }> = [];
+  for (const entry of activeModuleEntries) {
+    for (let i = 0; i < entry.items.length; i++) {
+      registeredItems.push({
+        entryId: entry._id,
+        itemIndex: i,
+        name: entry.items[i].name,
+        portionGrams: entry.items[i].portionGrams,
+        energy_kcal: entry.items[i].energy_kcal,
+      });
+    }
+  }
+  const registeredKcal = registeredItems.reduce((s, i) => s + i.energy_kcal, 0);
 
   return (
     <div className="min-h-screen pb-24">
@@ -176,16 +211,17 @@ export default function DashboardPage() {
                   setPendingItems([]);
                   setAddTab("alimentos");
                   setSelectedFood(null);
+                  setShareWithPartner(false);
                 }}
               />
 
-              {/* Logged entries for this module */}
+              {/* Read-only preview of logged items */}
               {entries
                 ?.filter((e) => e.module === mod)
                 .map((entry) => (
                   <div
                     key={entry._id}
-                    className="ml-10 border-l border-border/40 pl-3 py-1.5"
+                    className="ml-10 border-l border-border/40 pl-3 py-1"
                   >
                     {entry.items.map((item, i) => (
                       <div
@@ -196,29 +232,10 @@ export default function DashboardPage() {
                           {item.name}
                         </span>
                         <span className="text-muted-foreground/70 ml-2 shrink-0 tabular-nums">
-                          {Math.round(item.portionGrams)}g ·{" "}
-                          {Math.round(item.energy_kcal)} kcal
+                          {Math.round(item.portionGrams)}g · {Math.round(item.energy_kcal)} kcal
                         </span>
                       </div>
                     ))}
-                    <div className="flex items-center gap-3 mt-0.5">
-                      <button
-                        onClick={async () => {
-                          await shareEntry({ entryId: entry._id, targetUserId: partnerId });
-                          setSharedEntryId(entry._id);
-                          setTimeout(() => setSharedEntryId(null), 2000);
-                        }}
-                        className="text-[11px] text-blue-400/70 hover:text-blue-400 font-medium"
-                      >
-                        {sharedEntryId === entry._id ? `✓ Enviado p/ ${partnerName}` : `Enviar p/ ${partnerName}`}
-                      </button>
-                      <button
-                        onClick={() => deleteEntry({ id: entry._id })}
-                        className="text-[11px] text-red-400/70 hover:text-red-400 font-medium"
-                      >
-                        Remover
-                      </button>
-                    </div>
                   </div>
                 ))}
             </div>
@@ -229,6 +246,13 @@ export default function DashboardPage() {
               consumed={totals.byModule["extra"].kcal}
               budget={0}
               itemCount={moduleItemCount["extra"]}
+              onClick={() => {
+                setActiveModule("extra");
+                setPendingItems([]);
+                setAddTab("alimentos");
+                setSelectedFood(null);
+                setShareWithPartner(false);
+              }}
             />
           )}
         </div>
@@ -242,6 +266,7 @@ export default function DashboardPage() {
             setPendingItems([]);
             setAddTab("alimentos");
             setSelectedFood(null);
+            setShareWithPartner(false);
           }}
         >
           + Adicionar alimento extra
@@ -251,7 +276,7 @@ export default function DashboardPage() {
         <PartnerView currentUserId={userId} date={today} />
       </div>
 
-      {/* Add food sheet */}
+      {/* Module Sheet */}
       <Sheet
         open={activeModule !== null}
         onOpenChange={(open) => {
@@ -288,52 +313,114 @@ export default function DashboardPage() {
           </SheetHeader>
 
           <div className="mt-4 space-y-4 overflow-y-auto max-h-[calc(85vh-140px)]">
-            {/* Tab switcher */}
-            {!selectedFood && (
-              <div className="flex gap-1 rounded-xl bg-secondary p-1">
+            {/* ===== REGISTERED ITEMS ===== */}
+            {registeredItems.length > 0 && (
+              <div className="space-y-1">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Registrados ({registeredItems.length} · {Math.round(registeredKcal)} kcal)
+                </h3>
+                {registeredItems.map((item, idx) => (
+                  <div
+                    key={`${item.entryId}-${item.itemIndex}`}
+                    className="flex items-center justify-between rounded-xl bg-card p-3 text-sm"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="truncate font-medium">{item.name}</p>
+                      <p className="text-[11px] text-muted-foreground tabular-nums">
+                        {Math.round(item.portionGrams)}g · {Math.round(item.energy_kcal)} kcal
+                      </p>
+                    </div>
+                    <button
+                      onClick={() =>
+                        removeItem({
+                          entryId: item.entryId,
+                          itemIndex: item.itemIndex,
+                        })
+                      }
+                      className="text-red-400 text-xs font-bold w-7 h-7 flex items-center justify-center rounded-full hover:bg-red-400/10 shrink-0 ml-2"
+                    >
+                      X
+                    </button>
+                  </div>
+                ))}
+
+                {/* Share module with partner */}
                 <button
-                  onClick={() => setAddTab("alimentos")}
-                  className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
-                    addTab === "alimentos"
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground"
+                  type="button"
+                  onClick={() => activeModule && handleShareModule(activeModule)}
+                  className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors w-full ${
+                    sharedModule === activeModule
+                      ? "bg-primary/10 text-primary ring-1 ring-primary/30"
+                      : "bg-secondary text-muted-foreground"
                   }`}
                 >
-                  Alimentos
-                </button>
-                <button
-                  onClick={() => setAddTab("receitas")}
-                  className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
-                    addTab === "receitas"
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground"
-                  }`}
-                >
-                  Receitas
+                  <span className="text-base">
+                    {sharedModule === activeModule ? "✓" : "→"}
+                  </span>
+                  <span>
+                    {sharedModule === activeModule
+                      ? `Enviado p/ ${partnerName}`
+                      : `Enviar tudo p/ ${partnerName}`}
+                  </span>
                 </button>
               </div>
             )}
 
-            {selectedFood ? (
-              <PortionInput
-                food={selectedFood}
-                onConfirm={handleAddFood}
-                onCancel={() => setSelectedFood(null)}
-              />
-            ) : addTab === "alimentos" ? (
-              <FoodSearch
-                onSelect={setSelectedFood}
-                placeholder="Buscar alimento para adicionar..."
-              />
-            ) : (
-              <RecipePicker onSelect={handleAddRecipe} />
-            )}
+            {/* ===== ADD NEW ITEMS ===== */}
+            <div className="space-y-3">
+              {registeredItems.length > 0 && (
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Adicionar
+                </h3>
+              )}
+
+              {/* Tab switcher */}
+              {!selectedFood && (
+                <div className="flex gap-1 rounded-xl bg-secondary p-1">
+                  <button
+                    onClick={() => setAddTab("alimentos")}
+                    className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
+                      addTab === "alimentos"
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground"
+                    }`}
+                  >
+                    Alimentos
+                  </button>
+                  <button
+                    onClick={() => setAddTab("receitas")}
+                    className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
+                      addTab === "receitas"
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground"
+                    }`}
+                  >
+                    Receitas
+                  </button>
+                </div>
+              )}
+
+              {selectedFood ? (
+                <PortionInput
+                  food={selectedFood}
+                  onConfirm={handleAddFood}
+                  onCancel={() => setSelectedFood(null)}
+                />
+              ) : addTab === "alimentos" ? (
+                <FoodSearch
+                  onSelect={setSelectedFood}
+                  placeholder="Buscar alimento para adicionar..."
+                />
+              ) : (
+                <RecipePicker onSelect={handleAddRecipe} />
+              )}
+            </div>
 
             {/* Pending items */}
             {pendingItems.length > 0 && (
               <div className="space-y-2">
                 <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Itens a adicionar ({pendingItems.length})
+                  Novos itens ({pendingItems.length})
                 </h3>
                 {pendingItems.map((item, i) => (
                   <div

@@ -148,6 +148,76 @@ export const deleteEntry = mutation({
   },
 });
 
+// Remove a single item from an entry by index
+export const removeItem = mutation({
+  args: {
+    entryId: v.id("dailyLogEntries"),
+    itemIndex: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const entry = await ctx.db.get(args.entryId);
+    if (!entry) throw new Error("Entry not found");
+
+    const newItems = entry.items.filter((_, i) => i !== args.itemIndex);
+
+    if (newItems.length === 0) {
+      await ctx.db.delete(args.entryId);
+      return;
+    }
+
+    const totalKcal = newItems.reduce((s, i) => s + i.energy_kcal, 0);
+    const totalProtein = newItems.reduce((s, i) => s + i.protein_g, 0);
+    const totalCarbs = newItems.reduce((s, i) => s + i.carbs_g, 0);
+    const totalFat = newItems.reduce((s, i) => s + i.lipids_g, 0);
+
+    await ctx.db.patch(args.entryId, {
+      items: newItems,
+      totalKcal,
+      totalProtein,
+      totalCarbs,
+      totalFat,
+    });
+  },
+});
+
+// Share all entries for a module with another user
+export const shareModuleEntries = mutation({
+  args: {
+    userId: v.string(),
+    date: v.string(),
+    module: v.string(),
+    targetUserId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const entries = await ctx.db
+      .query("dailyLogEntries")
+      .withIndex("by_user_date_module", (q) =>
+        q
+          .eq("userId", args.userId)
+          .eq("date", args.date)
+          .eq("module", args.module)
+      )
+      .collect();
+
+    for (const entry of entries) {
+      await ctx.db.insert("dailyLogEntries", {
+        userId: args.targetUserId,
+        date: entry.date,
+        module: entry.module,
+        recipeId: entry.recipeId,
+        items: entry.items,
+        totalKcal: entry.totalKcal,
+        totalProtein: entry.totalProtein,
+        totalCarbs: entry.totalCarbs,
+        totalFat: entry.totalFat,
+        note: entry.note,
+      });
+    }
+
+    return entries.length;
+  },
+});
+
 // Get all dates with entries for a user (for history view)
 export const getDatesWithEntries = query({
   args: { userId: v.string() },
