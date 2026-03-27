@@ -236,7 +236,11 @@ function RegistroTab({
   };
 
   const initialWeight = 112;
-  const currentWeight = profile?.weight_kg ?? initialWeight;
+  // Current weight = most recent by DATE, not by insertion order
+  const mostRecentEntry = weightHistory
+    ? [...weightHistory].sort((a, b) => b.date.localeCompare(a.date))[0]
+    : undefined;
+  const currentWeight = mostRecentEntry?.weight_kg ?? profile?.weight_kg ?? initialWeight;
   const totalLost = initialWeight - currentWeight;
   const nextThreshold = Math.floor(totalLost / 5) * 5 + 5;
   const kgToNextRecalc = nextThreshold - totalLost;
@@ -248,7 +252,7 @@ function RegistroTab({
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-xl bg-card p-3 text-center">
             <div className="text-2xl font-bold tabular-nums">
-              {formatGrams(profile.weight_kg)}
+              {formatGrams(currentWeight)}
             </div>
             <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mt-0.5">
               Peso (kg)
@@ -343,7 +347,7 @@ function RegistroTab({
           </h2>
           <div className="space-y-1">
             {[...weightHistory]
-              .sort((a, b) => b.date.localeCompare(a.date))
+              .sort((a, b) => a.date.localeCompare(b.date))
               .map((entry) => (
                 <div
                   key={entry._id}
@@ -401,20 +405,26 @@ function ProjecaoTab({
     );
   }
 
-  const target = parseFloat(targetWeight.replace(",", "."));
-  const isValidTarget = !isNaN(target) && target > 0 && target < profile.weight_kg;
-
-  // Find earliest weight entry date as projection start
+  // Current weight = most recent by DATE, not by insertion order
   const sortedHistory = weightHistory
     ? [...weightHistory].sort((a, b) => a.date.localeCompare(b.date))
     : [];
+  const mostRecentEntry = sortedHistory.length > 0
+    ? sortedHistory[sortedHistory.length - 1]
+    : undefined;
+  const currentWeight = mostRecentEntry?.weight_kg ?? profile.weight_kg;
+
+  const target = parseFloat(targetWeight.replace(",", "."));
+  const isValidTarget = !isNaN(target) && target > 0 && target < currentWeight;
+
+  // Find earliest weight entry date as projection start
   const startDate =
     sortedHistory.length > 0 ? sortedHistory[0].date : getTodayISO();
 
   const projections = useMemo(() => {
     if (!isValidTarget) return [];
     return buildProjection(
-      profile.weight_kg,
+      currentWeight,
       target,
       profile.height_cm,
       profile.age,
@@ -425,7 +435,7 @@ function ProjecaoTab({
       sortedHistory
     );
   }, [
-    profile.weight_kg,
+    currentWeight,
     profile.height_cm,
     profile.age,
     profile.sex,
@@ -469,7 +479,7 @@ function ProjecaoTab({
               Peso atual
             </label>
             <div className="h-10 rounded-xl bg-secondary flex items-center justify-center text-sm font-bold tabular-nums">
-              {formatGrams(profile.weight_kg)} kg
+              {formatGrams(currentWeight)} kg
             </div>
           </div>
           <div>
@@ -501,7 +511,7 @@ function ProjecaoTab({
             </h2>
             <div className="flex items-baseline gap-2">
               <span className="text-2xl font-bold tabular-nums">
-                {formatGrams(profile.weight_kg)}
+                {formatGrams(currentWeight)}
               </span>
               <span className="text-muted-foreground">→</span>
               <span className="text-2xl font-bold text-primary tabular-nums">
@@ -639,7 +649,7 @@ function ProjecaoTab({
       {!isValidTarget && targetWeight && (
         <div className="text-center py-8 text-muted-foreground text-sm">
           Insira um peso meta menor que o peso atual (
-          {formatGrams(profile.weight_kg)} kg).
+          {formatGrams(currentWeight)} kg).
         </div>
       )}
     </>
