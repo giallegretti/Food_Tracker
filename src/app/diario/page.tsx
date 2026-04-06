@@ -612,6 +612,7 @@ function DiarioContent() {
   const today = getTodayISO();
 
   const [editingDate, setEditingDate] = useState<string | null>(null);
+  const [manualDate, setManualDate] = useState("");
 
   const profile = useQuery(api.userProfiles.getByUserId, { userId });
   const datesWithEntries = useQuery(api.dailyLog.getDatesWithEntries, {
@@ -650,6 +651,28 @@ function DiarioContent() {
       </div>
 
       <div className="mx-auto max-w-md px-4 space-y-5">
+        {/* Date picker for accessing any past day */}
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            value={manualDate}
+            max={today}
+            onChange={(e) => setManualDate(e.target.value)}
+            className="flex-1 h-11 rounded-xl bg-secondary border-0 px-3 text-sm text-foreground"
+          />
+          <Button
+            variant="secondary"
+            className="h-11 rounded-xl px-4 font-semibold shrink-0"
+            disabled={!manualDate || manualDate > today}
+            onClick={() => {
+              setEditingDate(manualDate);
+              setManualDate("");
+            }}
+          >
+            Abrir dia
+          </Button>
+        </div>
+
         {months.length === 0 && (
           <div className="text-center py-12 text-muted-foreground text-sm">
             Nenhum registro ainda.
