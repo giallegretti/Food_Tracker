@@ -121,6 +121,7 @@ export default function NovaReceitaPage() {
           <FoodSearch
             onSelect={(food) => setSelectedFood(food)}
             placeholder="Adicionar alimento..."
+            createdBy={userId}
           />
         )}
 

@@ -428,6 +428,7 @@ function DayEditor({
               <FoodSearch
                 onSelect={setSelectedFood}
                 placeholder="Buscar alimento para adicionar..."
+                createdBy={userId}
               />
             ) : (
               <RecipePicker onSelect={handleAddRecipe} />

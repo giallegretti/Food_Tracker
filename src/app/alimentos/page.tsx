@@ -68,6 +68,7 @@ export default function AlimentosPage() {
             <FoodSearch
               onSelect={(food) => setSelectedFood(food)}
               placeholder="Buscar alimento por nome..."
+              createdBy={userId}
             />
           )}
         </div>
