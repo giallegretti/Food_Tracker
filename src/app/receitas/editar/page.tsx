@@ -15,7 +15,8 @@ import { Doc, Id } from "../../../../convex/_generated/dataModel";
 import type { FoodItem } from "@/components/food/FoodSearch";
 
 interface RecipeItem {
-  foodId: Id<"foods">;
+  foodId?: Id<"foods">;
+  customFoodId?: Id<"customFoods">;
   name: string;
   portionGrams: number;
   energy_kcal: number;
@@ -48,7 +49,8 @@ function EditarReceitaContent() {
       setModule(recipe.module);
       setItems(
         recipe.items.map((item) => ({
-          foodId: item.foodId,
+          foodId: item.foodId ?? undefined,
+          customFoodId: item.customFoodId ?? undefined,
           name: item.name,
           portionGrams: item.portionGrams,
           energy_kcal: item.energy_kcal,
@@ -67,7 +69,8 @@ function EditarReceitaContent() {
       setItems((prev) => [
         ...prev,
         {
-          foodId: food._id as Id<"foods">,
+          foodId: food.isCustom ? undefined : (food._id as Id<"foods">),
+          customFoodId: food.isCustom ? (food._id as Id<"customFoods">) : undefined,
           name: food.name,
           portionGrams: grams,
           energy_kcal: food.energy_kcal * factor,

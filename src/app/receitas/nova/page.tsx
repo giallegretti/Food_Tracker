@@ -16,7 +16,8 @@ import type { FoodItem } from "@/components/food/FoodSearch";
 import { useRouter } from "next/navigation";
 
 interface RecipeItem {
-  foodId: Id<"foods">;
+  foodId?: Id<"foods">;
+  customFoodId?: Id<"customFoods">;
   name: string;
   portionGrams: number;
   energy_kcal: number;
@@ -41,7 +42,8 @@ export default function NovaReceitaPage() {
       setItems((prev) => [
         ...prev,
         {
-          foodId: food._id as Id<"foods">,
+          foodId: food.isCustom ? undefined : (food._id as Id<"foods">),
+          customFoodId: food.isCustom ? (food._id as Id<"customFoods">) : undefined,
           name: food.name,
           portionGrams: grams,
           energy_kcal: food.energy_kcal * factor,

@@ -2,7 +2,8 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
 const recipeItemValidator = v.object({
-  foodId: v.id("foods"),
+  foodId: v.optional(v.id("foods")),
+  customFoodId: v.optional(v.id("customFoods")),
   name: v.string(),
   portionGrams: v.float64(),
   energy_kcal: v.float64(),

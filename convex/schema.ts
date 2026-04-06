@@ -68,7 +68,8 @@ export default defineSchema({
     module: v.optional(v.string()),
     items: v.array(
       v.object({
-        foodId: v.id("foods"),
+        foodId: v.optional(v.id("foods")),
+        customFoodId: v.optional(v.id("customFoods")),
         name: v.string(),
         portionGrams: v.float64(),
         energy_kcal: v.float64(),
