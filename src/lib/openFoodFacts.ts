@@ -9,21 +9,11 @@ export type OFFProduct = {
 };
 
 export async function searchOpenFoodFacts(
-  query: string,
-  limit = 10
+  query: string
 ): Promise<OFFProduct[]> {
-  const url = new URL(
-    "https://world.openfoodfacts.org/cgi/search.pl"
+  const res = await fetch(
+    `/api/off-search?q=${encodeURIComponent(query)}`
   );
-  url.searchParams.set("search_terms", query);
-  url.searchParams.set("search_simple", "1");
-  url.searchParams.set("action", "process");
-  url.searchParams.set("json", "1");
-  url.searchParams.set("page_size", String(limit));
-  url.searchParams.set("countries_tags_en", "brazil");
-  url.searchParams.set("fields", "product_name,brands,nutriments");
-
-  const res = await fetch(url.toString());
   if (!res.ok) throw new Error("Erro ao buscar no Open Food Facts");
 
   const data = await res.json();
