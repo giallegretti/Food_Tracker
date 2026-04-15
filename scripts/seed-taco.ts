@@ -167,24 +167,27 @@ async function main() {
   // Seed user profiles
   console.log("Seeding user profiles...");
 
+  // Giovanna em semaglutida 0,25mg SC semanal (abr/2026)
+  // TDEE ~2.220 kcal; alvo 1.400 kcal/dia (faixa 1.300–1.500 com medicação)
+  // Macros: 132g proteína (1,2 g/kg) · 75–95g carb · 50–58g gordura
   await client.mutation(api.userProfiles.upsert, {
     userId: "giovanna",
     name: "Giovanna",
     sex: "F",
     age: 29,
-    weight_kg: 112,
+    weight_kg: 110,
     height_cm: 169,
     activityFactor: 1.2,
-    deficitKcal: 500,
-    proteinPct: 35,
-    carbsPct: 40,
-    fatPct: 25,
+    deficitKcal: 820,
+    proteinPct: 40,
+    carbsPct: 25,
+    fatPct: 35,
     modules: {
-      cafeDaManha: 350,
-      almoco: 500,
-      lanche: 150,
-      jantar: 550,
-      doce: 150,
+      cafeDaManha: 280,
+      almoco: 420,
+      lanche: 200,
+      jantar: 380,
+      doce: 120,
     },
   });
 
