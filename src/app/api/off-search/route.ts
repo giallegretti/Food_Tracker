@@ -1,19 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 
-export async function GET(req: NextRequest) {
-  const q = req.nextUrl.searchParams.get("q");
-  if (!q) {
-    return NextResponse.json({ products: [] });
-  }
+const BASE = "https://search.openfoodfacts.org/search";
+const FIELDS = "product_name,brands,nutriments,countries_tags";
+const PAGE_SIZE = 25;
 
-  const url = new URL("https://world.openfoodfacts.org/cgi/search.pl");
-  url.searchParams.set("search_terms", q);
-  url.searchParams.set("search_simple", "1");
-  url.searchParams.set("action", "process");
-  url.searchParams.set("json", "1");
-  url.searchParams.set("page_size", "15");
-  url.searchParams.set("countries_tags_en", "brazil");
-  url.searchParams.set("fields", "product_name,brands,nutriments");
+async function runSearch(q: string, brazilOnly: boolean) {
+  const url = new URL(BASE);
+  const query = brazilOnly ? `${q} countries_tags:"en:brazil"` : q;
+  url.searchParams.set("q", query);
+  url.searchParams.set("page_size", String(PAGE_SIZE));
+  url.searchParams.set("fields", FIELDS);
 
   const res = await fetch(url.toString(), {
     headers: {
@@ -21,10 +17,21 @@ export async function GET(req: NextRequest) {
     },
   });
 
-  if (!res.ok) {
-    return NextResponse.json({ products: [] }, { status: 502 });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return Array.isArray(data.hits) ? data.hits : [];
+}
+
+export async function GET(req: NextRequest) {
+  const q = req.nextUrl.searchParams.get("q");
+  if (!q) return NextResponse.json({ products: [] });
+
+  let hits = await runSearch(q, true);
+  if (!hits || hits.length === 0) {
+    hits = await runSearch(q, false);
   }
 
-  const data = await res.json();
-  return NextResponse.json(data);
+  if (!hits) return NextResponse.json({ products: [] }, { status: 502 });
+
+  return NextResponse.json({ products: hits });
 }

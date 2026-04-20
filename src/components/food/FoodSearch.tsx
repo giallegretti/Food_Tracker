@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Doc, Id } from "../../../convex/_generated/dataModel";
 import {
   searchOpenFoodFacts,
-  type OFFProduct,
+  type ExternalProduct,
 } from "@/lib/openFoodFacts";
 
 export type FoodItem = {
@@ -64,8 +64,8 @@ export function FoodSearch({
 }: FoodSearchProps) {
   const [search, setSearch] = useState("");
 
-  // OFF state
-  const [offResults, setOffResults] = useState<OFFProduct[] | null>(null);
+  // External search state (Open Food Facts + USDA)
+  const [offResults, setOffResults] = useState<ExternalProduct[] | null>(null);
   const [offLoading, setOffLoading] = useState(false);
   const [offSaving, setOffSaving] = useState<number | null>(null);
 
@@ -123,7 +123,7 @@ export function FoodSearch({
   }, [search]);
 
   const handleSelectOFF = useCallback(
-    async (product: OFFProduct, index: number) => {
+    async (product: ExternalProduct, index: number) => {
       if (!createdBy) return;
       setOffSaving(index);
       try {
@@ -190,7 +190,7 @@ export function FoodSearch({
                   onClick={handleSearchOFF}
                   disabled={offLoading}
                 >
-                  {offLoading ? "Buscando..." : "Buscar no Open Food Facts"}
+                  {offLoading ? "Buscando..." : "Buscar em bases externas"}
                 </Button>
               )}
             </div>
@@ -237,7 +237,7 @@ export function FoodSearch({
                   >
                     {offLoading
                       ? "Buscando..."
-                      : "Nao encontrou? Buscar no Open Food Facts"}
+                      : "Nao encontrou? Buscar em bases externas"}
                   </Button>
                 </div>
               )}
@@ -249,12 +249,12 @@ export function FoodSearch({
             <div className="border-t border-primary/20">
               <div className="px-4 py-2 bg-primary/5">
                 <span className="text-[10px] font-semibold text-primary uppercase tracking-wider">
-                  Open Food Facts
+                  Bases externas (OFF + USDA)
                 </span>
               </div>
               {offResults.length === 0 ? (
                 <div className="p-4 text-center text-sm text-muted-foreground">
-                  Nenhum resultado no Open Food Facts
+                  Nenhum resultado nas bases externas
                 </div>
               ) : (
                 <div className="max-h-[30vh] overflow-y-auto overscroll-contain divide-y divide-border/30">
@@ -268,8 +268,15 @@ export function FoodSearch({
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium leading-snug">
                           {product.product_name}
-                          <span className="ml-1.5 text-[10px] font-medium text-orange-600/70 bg-orange-500/10 px-1.5 py-0.5 rounded-full">
-                            OFF
+                          <span
+                            className={
+                              "ml-1.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full " +
+                              (product.source === "usda"
+                                ? "text-blue-600/70 bg-blue-500/10"
+                                : "text-orange-600/70 bg-orange-500/10")
+                            }
+                          >
+                            {product.source === "usda" ? "USDA" : "OFF"}
                           </span>
                         </p>
                         <p className="text-[10px] text-muted-foreground mt-0.5">
