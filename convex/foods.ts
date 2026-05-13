@@ -17,6 +17,25 @@ export const search = query({
   },
 });
 
+// Full list, trimmed to the fields the client needs for search + display.
+// Subscribed once at app boot so search runs in-memory (no per-keystroke calls).
+export const list = query({
+  handler: async (ctx) => {
+    const foods = await ctx.db.query("foods").collect();
+    return foods.map((f) => ({
+      _id: f._id,
+      name: f.name,
+      nameNormalized: f.nameNormalized,
+      category: f.category,
+      energy_kcal: f.energy_kcal,
+      protein_g: f.protein_g,
+      carbs_g: f.carbs_g,
+      lipids_g: f.lipids_g,
+      fiber_g: f.fiber_g,
+    }));
+  },
+});
+
 // Get all foods by category
 export const byCategory = query({
   args: { category: v.string() },

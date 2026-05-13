@@ -1,15 +1,16 @@
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Doc, Id } from "../../../convex/_generated/dataModel";
+import { Id } from "../../../convex/_generated/dataModel";
 import {
   searchOpenFoodFacts,
   type ExternalProduct,
 } from "@/lib/openFoodFacts";
+import { useFoodsCache } from "@/hooks/useFoodsCache";
 
 export type FoodItem = {
   _id: Id<"foods"> | Id<"customFoods">;
@@ -22,34 +23,6 @@ export type FoodItem = {
   fiber_g: number;
   isCustom: boolean;
 };
-
-function tacoToFoodItem(food: Doc<"foods">): FoodItem {
-  return {
-    _id: food._id,
-    name: food.name,
-    category: food.category,
-    energy_kcal: food.energy_kcal,
-    protein_g: food.protein_g,
-    carbs_g: food.carbs_g,
-    lipids_g: food.lipids_g,
-    fiber_g: food.fiber_g,
-    isCustom: false,
-  };
-}
-
-function customToFoodItem(food: Doc<"customFoods">): FoodItem {
-  return {
-    _id: food._id,
-    name: food.name,
-    category: undefined,
-    energy_kcal: food.energy_kcal,
-    protein_g: food.protein_g,
-    carbs_g: food.carbs_g,
-    lipids_g: food.lipids_g,
-    fiber_g: food.fiber_g,
-    isCustom: true,
-  };
-}
 
 interface FoodSearchProps {
   onSelect: (food: FoodItem) => void;
@@ -70,35 +43,15 @@ export function FoodSearch({
   const [offSaving, setOffSaving] = useState<number | null>(null);
 
   const addCustomFood = useMutation(api.customFoods.add);
+  const { ready, searchFoods } = useFoodsCache();
 
   const isSearching = search.trim().length >= 2;
 
-  const tacoResults = useQuery(
-    api.foods.search,
-    isSearching ? { searchTerm: search, limit: 15 } : "skip"
-  );
-
-  const customResults = useQuery(
-    api.customFoods.search,
-    isSearching ? { searchTerm: search, limit: 15 } : "skip"
-  );
-
-  const results = useMemo(() => {
+  const results = useMemo<FoodItem[] | undefined>(() => {
     if (!isSearching) return undefined;
-    if (tacoResults === undefined && customResults === undefined) return undefined;
-
-    const items: FoodItem[] = [];
-
-    // Custom foods first (user's own foods are more relevant)
-    if (customResults) {
-      items.push(...customResults.map(customToFoodItem));
-    }
-    if (tacoResults) {
-      items.push(...tacoResults.map(tacoToFoodItem));
-    }
-
-    return items;
-  }, [isSearching, tacoResults, customResults]);
+    if (!ready) return undefined;
+    return searchFoods(search, 15);
+  }, [isSearching, ready, searchFoods, search]);
 
   const handleSelect = useCallback(
     (food: FoodItem) => {
