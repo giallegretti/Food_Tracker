@@ -168,6 +168,7 @@ function DayEditor({
 
   const addEntry = useMutation(api.dailyLog.addEntry);
   const removeItem = useMutation(api.dailyLog.removeItem);
+  const updateItem = useMutation(api.dailyLog.updateItem);
   const shareModuleEntries = useMutation(api.dailyLog.shareModuleEntries);
 
   const [activeModule, setActiveModule] = useState<string | null>(null);
@@ -186,6 +187,10 @@ function DayEditor({
   >([]);
   const [shareWithPartner, setShareWithPartner] = useState(false);
   const [sharedModule, setSharedModule] = useState<string | null>(null);
+  const [editingItem, setEditingItem] = useState<{
+    entryId: Doc<"dailyLogEntries">["_id"];
+    itemIndex: number;
+  } | null>(null);
   const partnerId = userId === "giovanna" ? "ricardo" : "giovanna";
   const partnerName = partnerId === "ricardo" ? "Ricardo" : "Giovanna";
 
@@ -296,6 +301,57 @@ function DayEditor({
   }
   const registeredKcal = registeredItems.reduce((s, i) => s + i.energy_kcal, 0);
 
+  // Build synthetic FoodItem (per-100g values) for the item being edited
+  let editingContext: {
+    food: FoodItem;
+    grams: number;
+    entryId: Doc<"dailyLogEntries">["_id"];
+    itemIndex: number;
+    foodId?: Doc<"foods">["_id"];
+  } | null = null;
+  if (editingItem) {
+    const entry = entries?.find((e) => e._id === editingItem.entryId);
+    const item = entry?.items[editingItem.itemIndex];
+    if (item && item.portionGrams > 0) {
+      const factor = item.portionGrams / 100;
+      editingContext = {
+        food: {
+          _id: (item.foodId ?? "edit-synthetic") as FoodItem["_id"],
+          name: item.name,
+          energy_kcal: item.energy_kcal / factor,
+          protein_g: item.protein_g / factor,
+          carbs_g: item.carbs_g / factor,
+          lipids_g: item.lipids_g / factor,
+          fiber_g: 0,
+          isCustom: !item.foodId,
+        },
+        grams: item.portionGrams,
+        entryId: editingItem.entryId,
+        itemIndex: editingItem.itemIndex,
+        foodId: item.foodId,
+      };
+    }
+  }
+
+  const handleConfirmEdit = async (food: FoodItem, grams: number) => {
+    if (!editingContext) return;
+    const factor = grams / 100;
+    await updateItem({
+      entryId: editingContext.entryId,
+      itemIndex: editingContext.itemIndex,
+      item: {
+        foodId: editingContext.foodId,
+        name: food.name,
+        portionGrams: grams,
+        energy_kcal: food.energy_kcal * factor,
+        protein_g: food.protein_g * factor,
+        carbs_g: food.carbs_g * factor,
+        lipids_g: food.lipids_g * factor,
+      },
+    });
+    setEditingItem(null);
+  };
+
   // If a module is active, show the unified module view
   if (activeModule !== null) {
     return (
@@ -320,6 +376,7 @@ function DayEditor({
               setActiveModule(null);
               setPendingItems([]);
               setSelectedFood(null);
+              setEditingItem(null);
             }}
             className="text-sm text-muted-foreground hover:text-foreground"
           >
@@ -333,32 +390,58 @@ function DayEditor({
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               Registrados ({registeredItems.length} · {Math.round(registeredKcal)} kcal)
             </h3>
-            {registeredItems.map((item) => (
-              <div
-                key={`${item.entryId}-${item.itemIndex}`}
-                className="flex items-center justify-between rounded-xl bg-card p-3 text-sm"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="truncate font-medium">{item.name}</p>
-                  <p className="text-[11px] text-muted-foreground tabular-nums">
-                    {Math.round(item.portionGrams)}g · {Math.round(item.energy_kcal)} kcal
-                  </p>
+            {registeredItems.map((item) => {
+              const isEditingThis =
+                editingItem?.entryId === item.entryId &&
+                editingItem?.itemIndex === item.itemIndex;
+              return (
+                <div
+                  key={`${item.entryId}-${item.itemIndex}`}
+                  className={`flex items-center justify-between rounded-xl p-3 text-sm transition-colors ${
+                    isEditingThis ? "bg-primary/10 ring-1 ring-primary/30" : "bg-card"
+                  }`}
+                >
+                  {isEditable ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedFood(null);
+                        setEditingItem({
+                          entryId: item.entryId,
+                          itemIndex: item.itemIndex,
+                        });
+                      }}
+                      className="flex-1 min-w-0 text-left"
+                    >
+                      <p className="truncate font-medium">{item.name}</p>
+                      <p className="text-[11px] text-muted-foreground tabular-nums">
+                        {Math.round(item.portionGrams)}g · {Math.round(item.energy_kcal)} kcal
+                      </p>
+                    </button>
+                  ) : (
+                    <div className="flex-1 min-w-0">
+                      <p className="truncate font-medium">{item.name}</p>
+                      <p className="text-[11px] text-muted-foreground tabular-nums">
+                        {Math.round(item.portionGrams)}g · {Math.round(item.energy_kcal)} kcal
+                      </p>
+                    </div>
+                  )}
+                  {isEditable && (
+                    <button
+                      onClick={() =>
+                        removeItem({
+                          entryId: item.entryId,
+                          itemIndex: item.itemIndex,
+                        })
+                      }
+                      className="text-red-400 text-xs font-bold w-7 h-7 flex items-center justify-center rounded-full hover:bg-red-400/10 shrink-0 ml-2"
+                    >
+                      X
+                    </button>
+                  )}
                 </div>
-                {isEditable && (
-                  <button
-                    onClick={() =>
-                      removeItem({
-                        entryId: item.entryId,
-                        itemIndex: item.itemIndex,
-                      })
-                    }
-                    className="text-red-400 text-xs font-bold w-7 h-7 flex items-center justify-center rounded-full hover:bg-red-400/10 shrink-0 ml-2"
-                  >
-                    X
-                  </button>
-                )}
-              </div>
-            ))}
+              );
+            })}
 
             {/* Share module */}
             {isEditable && (
@@ -384,8 +467,24 @@ function DayEditor({
           </div>
         )}
 
+        {/* Edit item */}
+        {isEditable && editingContext && (
+          <div className="space-y-2">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Editar item
+            </h3>
+            <PortionInput
+              food={editingContext.food}
+              suggestedGrams={editingContext.grams}
+              submitLabel="Atualizar"
+              onConfirm={handleConfirmEdit}
+              onCancel={() => setEditingItem(null)}
+            />
+          </div>
+        )}
+
         {/* Add section */}
-        {isEditable && (
+        {isEditable && !editingContext && (
           <div className="space-y-3">
             {registeredItems.length > 0 && (
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -532,6 +631,7 @@ function DayEditor({
                     setPendingItems([]);
                     setAddTab("alimentos");
                     setShareWithPartner(false);
+                    setEditingItem(null);
                   }
                 : undefined
             }
@@ -572,6 +672,7 @@ function DayEditor({
             setPendingItems([]);
             setAddTab("alimentos");
             setShareWithPartner(false);
+            setEditingItem(null);
           }}
         >
           + Adicionar alimento extra

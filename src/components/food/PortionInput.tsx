@@ -12,6 +12,7 @@ interface PortionInputProps {
   onConfirm: (food: FoodItem, grams: number) => void;
   onCancel: () => void;
   suggestedGrams?: number;
+  submitLabel?: string;
 }
 
 export function PortionInput({
@@ -19,6 +20,7 @@ export function PortionInput({
   onConfirm,
   onCancel,
   suggestedGrams,
+  submitLabel = "Adicionar",
 }: PortionInputProps) {
   const householdMeasures = useMemo(
     () => getHouseholdMeasures(food.name),
@@ -166,7 +168,7 @@ export function PortionInput({
           className="flex-1 h-11 rounded-xl font-semibold"
           disabled={grams <= 0}
         >
-          Adicionar
+          {submitLabel}
         </Button>
       </div>
     </div>

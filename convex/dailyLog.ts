@@ -148,6 +148,39 @@ export const deleteEntry = mutation({
   },
 });
 
+// Replace a single item in an entry (used to edit portion/values)
+export const updateItem = mutation({
+  args: {
+    entryId: v.id("dailyLogEntries"),
+    itemIndex: v.number(),
+    item: logItemValidator,
+  },
+  handler: async (ctx, args) => {
+    const entry = await ctx.db.get(args.entryId);
+    if (!entry) throw new Error("Entry not found");
+    if (args.itemIndex < 0 || args.itemIndex >= entry.items.length) {
+      throw new Error("Invalid item index");
+    }
+
+    const newItems = entry.items.map((it, i) =>
+      i === args.itemIndex ? args.item : it
+    );
+
+    const totalKcal = newItems.reduce((s, i) => s + i.energy_kcal, 0);
+    const totalProtein = newItems.reduce((s, i) => s + i.protein_g, 0);
+    const totalCarbs = newItems.reduce((s, i) => s + i.carbs_g, 0);
+    const totalFat = newItems.reduce((s, i) => s + i.lipids_g, 0);
+
+    await ctx.db.patch(args.entryId, {
+      items: newItems,
+      totalKcal,
+      totalProtein,
+      totalCarbs,
+      totalFat,
+    });
+  },
+});
+
 // Remove a single item from an entry by index
 export const removeItem = mutation({
   args: {
