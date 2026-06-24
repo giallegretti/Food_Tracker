@@ -251,6 +251,44 @@ export const shareModuleEntries = mutation({
   },
 });
 
+// Copy all entries of a single module from one date to another (same user)
+export const copyModuleToDate = mutation({
+  args: {
+    userId: v.string(),
+    fromDate: v.string(),
+    module: v.string(),
+    toDate: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const entries = await ctx.db
+      .query("dailyLogEntries")
+      .withIndex("by_user_date_module", (q) =>
+        q
+          .eq("userId", args.userId)
+          .eq("date", args.fromDate)
+          .eq("module", args.module)
+      )
+      .collect();
+
+    for (const entry of entries) {
+      await ctx.db.insert("dailyLogEntries", {
+        userId: args.userId,
+        date: args.toDate,
+        module: entry.module,
+        recipeId: entry.recipeId,
+        items: entry.items,
+        totalKcal: entry.totalKcal,
+        totalProtein: entry.totalProtein,
+        totalCarbs: entry.totalCarbs,
+        totalFat: entry.totalFat,
+        note: entry.note,
+      });
+    }
+
+    return entries.length;
+  },
+});
+
 // Get all dates with entries for a user (for history view)
 export const getDatesWithEntries = query({
   args: { userId: v.string() },

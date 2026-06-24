@@ -170,8 +170,12 @@ function DayEditor({
   const removeItem = useMutation(api.dailyLog.removeItem);
   const updateItem = useMutation(api.dailyLog.updateItem);
   const shareModuleEntries = useMutation(api.dailyLog.shareModuleEntries);
+  const copyModuleToDate = useMutation(api.dailyLog.copyModuleToDate);
 
   const [activeModule, setActiveModule] = useState<string | null>(null);
+  const [copyTargetDate, setCopyTargetDate] = useState("");
+  const [copyOpen, setCopyOpen] = useState(false);
+  const [copiedTo, setCopiedTo] = useState<string | null>(null);
   const [addTab, setAddTab] = useState<"alimentos" | "receitas">("alimentos");
   const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null);
   const [pendingItems, setPendingItems] = useState<
@@ -253,6 +257,27 @@ function DayEditor({
       setTimeout(() => setSharedModule(null), 2000);
     },
     [userId, date, partnerId, shareModuleEntries]
+  );
+
+  const handleCopyModule = useCallback(
+    async (mod: string) => {
+      if (!copyTargetDate || copyTargetDate === date) return;
+      await copyModuleToDate({
+        userId,
+        fromDate: date,
+        module: mod,
+        toDate: copyTargetDate,
+      });
+      const label = new Date(copyTargetDate + "T12:00:00").toLocaleDateString(
+        "pt-BR",
+        { day: "numeric", month: "short" }
+      );
+      setCopiedTo(label);
+      setCopyOpen(false);
+      setCopyTargetDate("");
+      setTimeout(() => setCopiedTo(null), 2500);
+    },
+    [userId, date, copyTargetDate, copyModuleToDate]
   );
 
   if (!totals || !entries) {
@@ -377,6 +402,9 @@ function DayEditor({
               setPendingItems([]);
               setSelectedFood(null);
               setEditingItem(null);
+              setCopyOpen(false);
+              setCopyTargetDate("");
+              setCopiedTo(null);
             }}
             className="text-sm text-muted-foreground hover:text-foreground"
           >
@@ -463,6 +491,55 @@ function DayEditor({
                     : `Enviar tudo p/ ${partnerName}`}
                 </span>
               </button>
+            )}
+
+            {/* Copy module to another day */}
+            {isEditable && (
+              <div className="space-y-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCopyOpen((v) => !v);
+                    setCopyTargetDate("");
+                  }}
+                  className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors w-full ${
+                    copiedTo
+                      ? "bg-primary/10 text-primary ring-1 ring-primary/30"
+                      : "bg-secondary text-muted-foreground"
+                  }`}
+                >
+                  <span className="text-base">{copiedTo ? "✓" : "📋"}</span>
+                  <span>
+                    {copiedTo
+                      ? `Copiado para ${copiedTo}`
+                      : "Copiar para outro dia"}
+                  </span>
+                </button>
+
+                {copyOpen && !copiedTo && (
+                  <div className="flex items-center gap-2 pl-1">
+                    <input
+                      type="date"
+                      value={copyTargetDate}
+                      max={today}
+                      onChange={(e) => setCopyTargetDate(e.target.value)}
+                      className="flex-1 h-10 rounded-xl bg-secondary border-0 px-3 text-sm text-foreground"
+                    />
+                    <Button
+                      variant="secondary"
+                      className="h-10 rounded-xl px-4 font-semibold shrink-0"
+                      disabled={
+                        !copyTargetDate || copyTargetDate === date
+                      }
+                      onClick={() =>
+                        activeModule && handleCopyModule(activeModule)
+                      }
+                    >
+                      Copiar
+                    </Button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -632,6 +709,9 @@ function DayEditor({
                     setAddTab("alimentos");
                     setShareWithPartner(false);
                     setEditingItem(null);
+                    setCopyOpen(false);
+                    setCopyTargetDate("");
+                    setCopiedTo(null);
                   }
                 : undefined
             }
@@ -673,6 +753,9 @@ function DayEditor({
             setAddTab("alimentos");
             setShareWithPartner(false);
             setEditingItem(null);
+            setCopyOpen(false);
+            setCopyTargetDate("");
+            setCopiedTo(null);
           }}
         >
           + Adicionar alimento extra
