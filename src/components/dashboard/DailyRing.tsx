@@ -46,44 +46,22 @@ export function DailyRing({
         ? "oklch(0.75 0.17 70)"
         : "oklch(0.72 0.19 155)";
 
-  // Texto da pílula
-  let pill: React.ReactNode;
-  if (basalMode) {
-    if (consumed < target) {
-      pill = (
-        <span className="text-sm font-semibold mt-1.5 px-2 py-0.5 rounded-full text-muted-foreground bg-secondary">
-          faltam {Math.round(target - consumed)} até o basal
-        </span>
-      );
-    } else if (!overMaintenance) {
-      pill = (
-        <span className="text-sm font-semibold mt-1.5 px-2 py-0.5 rounded-full text-emerald-400 bg-emerald-400/10">
-          no basal · déficit {Math.round(maintenance! - consumed)}
-        </span>
-      );
-    } else {
-      pill = (
-        <span className="text-sm font-semibold mt-1.5 px-2 py-0.5 rounded-full text-red-400 bg-red-400/10">
-          +{Math.round(consumed - maintenance!)} acima da manutenção
-        </span>
-      );
-    }
-  } else {
-    pill = (
-      <span
-        className={cn(
-          "text-sm font-semibold mt-1.5 px-2 py-0.5 rounded-full",
-          isOver
-            ? "text-red-400 bg-red-400/10"
-            : "text-emerald-400 bg-emerald-400/10"
-        )}
-      >
-        {isOver
-          ? `+${Math.round(consumed - target)} acima`
-          : `${Math.round(remaining)} restam`}
-      </span>
-    );
-  }
+  // No modelo meta = basal a roda mostra só consumo + total (sem rótulo).
+  // No modelo de déficit mantém a pílula "X restam / +X acima".
+  const pill: React.ReactNode = basalMode ? null : (
+    <span
+      className={cn(
+        "text-sm font-semibold mt-1.5 px-2 py-0.5 rounded-full",
+        isOver
+          ? "text-red-400 bg-red-400/10"
+          : "text-emerald-400 bg-emerald-400/10"
+      )}
+    >
+      {isOver
+        ? `+${Math.round(consumed - target)} acima`
+        : `${Math.round(remaining)} restam`}
+    </span>
+  );
 
   return (
     <div className="relative flex flex-col items-center justify-center" style={{ width: size, height: size }}>

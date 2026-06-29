@@ -155,11 +155,13 @@ function DayEditor({
   userId,
   date,
   profile,
+  dayTargetKcal,
   onClose,
 }: {
   userId: string;
   date: string;
   profile: Doc<"userProfiles">;
+  dayTargetKcal: number;
   onClose: () => void;
 }) {
   const today = getTodayISO();
@@ -689,7 +691,7 @@ function DayEditor({
           {formatKcal(totals.kcal)}
         </span>
         <span className="text-sm text-muted-foreground">
-          / {formatKcal(profile.targetKcal)} kcal
+          / {formatKcal(dayTargetKcal)} kcal
         </span>
       </div>
 
@@ -803,6 +805,7 @@ function DiarioContent() {
   const datesWithEntries = useQuery(api.dailyLog.getDatesWithEntries, {
     userId,
   });
+  const weightHistory = useQuery(api.weightLog.getByUser, { userId });
 
   if (!profile) {
     return (
@@ -812,12 +815,34 @@ function DiarioContent() {
     );
   }
 
-  const targetKcal = profile.targetKcal;
-  const targets: MacroTargets = {
-    kcal: targetKcal,
-    protein: (targetKcal * profile.proteinPct) / 100 / 4,
-    carbs: (targetKcal * profile.carbsPct) / 100 / 4,
-    fat: (targetKcal * profile.fatPct) / 100 / 9,
+  const isBasalMode = profile.targetMode === "basal";
+
+  // Pesagens em ordem crescente para achar o basal vigente em cada data.
+  // O weightLog guarda o bmr de cada pesagem, então a meta de um dia passado
+  // reflete o peso daquele dia, não o atual.
+  const weighAsc = [...(weightHistory ?? [])].sort((a, b) =>
+    a.date.localeCompare(b.date)
+  );
+  const basalForDate = (date: string): number => {
+    if (weighAsc.length === 0) return profile.bmr;
+    let chosen = weighAsc[0];
+    for (const w of weighAsc) {
+      if (w.date <= date) chosen = w;
+      else break;
+    }
+    return chosen.bmr;
+  };
+  const targetsForDate = (date: string): MacroTargets => {
+    const basal = basalForDate(date);
+    const kcal = isBasalMode
+      ? basal
+      : basal * profile.activityFactor - profile.deficitKcal;
+    return {
+      kcal,
+      protein: (kcal * profile.proteinPct) / 100 / 4,
+      carbs: (kcal * profile.carbsPct) / 100 / 4,
+      fat: (kcal * profile.fatPct) / 100 / 9,
+    };
   };
 
   const allDates = datesWithEntries || [];
@@ -866,7 +891,7 @@ function DiarioContent() {
 
         {months.map(({ monthKey, label, days }) => {
           const daysWithin = days.filter(
-            (d) => d.totalKcal <= targetKcal
+            (d) => d.totalKcal <= targetsForDate(d.date).kcal
           ).length;
           const daysOver = days.length - daysWithin;
           const avgProtein =
@@ -911,7 +936,7 @@ function DiarioContent() {
                   <DaySummaryCard
                     key={day.date}
                     day={day}
-                    targets={targets}
+                    targets={targetsForDate(day.date)}
                     dateLabel={dateLabel}
                     onClick={() => setEditingDate(day.date)}
                   />
@@ -936,12 +961,13 @@ function DiarioContent() {
           <SheetHeader>
             <SheetTitle className="text-left">Detalhes do dia</SheetTitle>
           </SheetHeader>
-          <div className="mt-4 overflow-y-auto max-h-[calc(90vh-80px)]">
+          <div className="mt-4 px-4 overflow-y-auto overflow-x-hidden max-h-[calc(90vh-80px)]">
             {editingDate && (
               <DayEditor
                 userId={userId}
                 date={editingDate}
                 profile={profile}
+                dayTargetKcal={targetsForDate(editingDate).kcal}
                 onClose={() => setEditingDate(null)}
               />
             )}

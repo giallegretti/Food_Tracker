@@ -4,6 +4,7 @@ interface BasalReferenceProps {
   consumed: number;
   basal: number; // = meta do dia
   maintenance: number; // sedentária
+  activity: number; // gasto com atividade física (×1,375)
 }
 
 /**
@@ -15,6 +16,7 @@ export function BasalReference({
   consumed,
   basal,
   maintenance,
+  activity,
 }: BasalReferenceProps) {
   // Escala 0 .. sedentária (com folga de 5% à direita p/ o palito não colar na borda).
   const max = maintenance * 1.05;
@@ -51,22 +53,33 @@ export function BasalReference({
 
       <div className="flex gap-2">
         <div className="flex-1 rounded-xl bg-card p-3 text-center">
-          <div className="text-xl font-bold tabular-nums text-emerald-400">
+          <div className="text-lg font-bold tabular-nums text-emerald-400">
             {Math.round(basal)}
           </div>
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-0.5">
-            Basal · meta do dia
+            Basal
           </div>
         </div>
         <div className="flex-1 rounded-xl bg-card p-3 text-center">
           <div
-            className="text-xl font-bold tabular-nums"
+            className="text-lg font-bold tabular-nums"
             style={{ color: "oklch(0.65 0.18 250)" }}
           >
             {Math.round(maintenance)}
           </div>
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-0.5">
-            Sedentária · manutenção
+            Sedentária
+          </div>
+        </div>
+        <div className="flex-1 rounded-xl bg-card p-3 text-center">
+          <div
+            className="text-lg font-bold tabular-nums"
+            style={{ color: "oklch(0.75 0.16 70)" }}
+          >
+            {Math.round(activity)}
+          </div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-0.5">
+            Atividade física
           </div>
         </div>
       </div>

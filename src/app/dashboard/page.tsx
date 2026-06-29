@@ -247,17 +247,17 @@ export default function DashboardPage() {
           <DailyRing
             consumed={totals.kcal}
             target={profile.targetKcal}
-            unitNote={isBasalMode ? "basal" : undefined}
             maintenance={isBasalMode ? profile.tdee : undefined}
           />
         </div>
 
-        {/* Basal / sedentária reference (modelo meta = basal) */}
+        {/* Basal / sedentária / atividade (modelo meta = basal) */}
         {isBasalMode && (
           <BasalReference
             consumed={totals.kcal}
             basal={profile.bmr}
             maintenance={profile.tdee}
+            activity={profile.bmr * 1.375}
           />
         )}
 
@@ -404,7 +404,7 @@ export default function DashboardPage() {
             </SheetTitle>
           </SheetHeader>
 
-          <div className="mt-4 space-y-4 overflow-y-auto max-h-[calc(85vh-140px)]">
+          <div className="mt-4 px-4 space-y-4 overflow-y-auto overflow-x-hidden max-h-[calc(85vh-140px)]">
             {/* ===== REGISTERED ITEMS ===== */}
             {registeredItems.length > 0 && (
               <div className="space-y-1">
