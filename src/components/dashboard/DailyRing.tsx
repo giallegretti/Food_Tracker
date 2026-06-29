@@ -6,9 +6,23 @@ interface DailyRingProps {
   consumed: number;
   target: number;
   size?: number;
+  /** Nota ao lado do alvo, ex: "basal". */
+  unitNote?: string;
+  /**
+   * Quando informado (modelo meta = basal), o alvo é o basal e este valor é a
+   * sedentária (manutenção). A roda fica verde até a manutenção e o texto mostra
+   * o quanto falta para o basal / o déficit restante até a manutenção.
+   */
+  maintenance?: number;
 }
 
-export function DailyRing({ consumed, target, size = 180 }: DailyRingProps) {
+export function DailyRing({
+  consumed,
+  target,
+  size = 180,
+  unitNote,
+  maintenance,
+}: DailyRingProps) {
   const percentage = target > 0 ? Math.min((consumed / target) * 100, 100) : 0;
   const remaining = target - consumed;
   const isOver = consumed > target;
@@ -18,11 +32,58 @@ export function DailyRing({ consumed, target, size = 180 }: DailyRingProps) {
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (percentage / 100) * circumference;
 
-  const ringColor = isOver
-    ? "oklch(0.65 0.2 25)"
-    : percentage > 80
-      ? "oklch(0.75 0.17 70)"
-      : "oklch(0.72 0.19 155)";
+  // Modelo meta = basal: verde até a manutenção, vermelho só acima dela.
+  const basalMode = maintenance !== undefined;
+  const overMaintenance = basalMode && consumed > maintenance!;
+
+  const ringColor = basalMode
+    ? overMaintenance
+      ? "oklch(0.65 0.2 25)"
+      : "oklch(0.72 0.19 155)"
+    : isOver
+      ? "oklch(0.65 0.2 25)"
+      : percentage > 80
+        ? "oklch(0.75 0.17 70)"
+        : "oklch(0.72 0.19 155)";
+
+  // Texto da pílula
+  let pill: React.ReactNode;
+  if (basalMode) {
+    if (consumed < target) {
+      pill = (
+        <span className="text-sm font-semibold mt-1.5 px-2 py-0.5 rounded-full text-muted-foreground bg-secondary">
+          faltam {Math.round(target - consumed)} até o basal
+        </span>
+      );
+    } else if (!overMaintenance) {
+      pill = (
+        <span className="text-sm font-semibold mt-1.5 px-2 py-0.5 rounded-full text-emerald-400 bg-emerald-400/10">
+          no basal · déficit {Math.round(maintenance! - consumed)}
+        </span>
+      );
+    } else {
+      pill = (
+        <span className="text-sm font-semibold mt-1.5 px-2 py-0.5 rounded-full text-red-400 bg-red-400/10">
+          +{Math.round(consumed - maintenance!)} acima da manutenção
+        </span>
+      );
+    }
+  } else {
+    pill = (
+      <span
+        className={cn(
+          "text-sm font-semibold mt-1.5 px-2 py-0.5 rounded-full",
+          isOver
+            ? "text-red-400 bg-red-400/10"
+            : "text-emerald-400 bg-emerald-400/10"
+        )}
+      >
+        {isOver
+          ? `+${Math.round(consumed - target)} acima`
+          : `${Math.round(remaining)} restam`}
+      </span>
+    );
+  }
 
   return (
     <div className="relative flex flex-col items-center justify-center" style={{ width: size, height: size }}>
@@ -57,20 +118,9 @@ export function DailyRing({ consumed, target, size = 180 }: DailyRingProps) {
       <div className="flex flex-col items-center justify-center z-10">
         <span className="text-3xl font-bold tracking-tight">{Math.round(consumed)}</span>
         <span className="text-xs text-muted-foreground mt-0.5">
-          de {Math.round(target)} kcal
+          de {Math.round(target)} kcal{unitNote ? ` · ${unitNote}` : ""}
         </span>
-        <span
-          className={cn(
-            "text-sm font-semibold mt-1.5 px-2 py-0.5 rounded-full",
-            isOver
-              ? "text-red-400 bg-red-400/10"
-              : "text-emerald-400 bg-emerald-400/10"
-          )}
-        >
-          {isOver
-            ? `+${Math.round(consumed - target)} acima`
-            : `${Math.round(remaining)} restam`}
-        </span>
+        {pill}
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { computeMetrics } from "./lib/calc";
 
 export const getByUserId = query({
   args: { userId: v.string() },
@@ -27,6 +28,7 @@ export const upsert = mutation({
     height_cm: v.float64(),
     activityFactor: v.float64(),
     deficitKcal: v.number(),
+    targetMode: v.optional(v.string()),
     proteinPct: v.float64(),
     carbsPct: v.float64(),
     fatPct: v.float64(),
@@ -39,20 +41,15 @@ export const upsert = mutation({
     }),
   },
   handler: async (ctx, args) => {
-    // Calculate BMR using Mifflin-St Jeor
-    const bmr =
-      args.sex === "F"
-        ? 10 * args.weight_kg +
-          6.25 * args.height_cm -
-          5 * args.age -
-          161
-        : 10 * args.weight_kg +
-          6.25 * args.height_cm -
-          5 * args.age +
-          5;
-
-    const tdee = bmr * args.activityFactor;
-    const targetKcal = tdee - args.deficitKcal;
+    const { bmr, tdee, targetKcal } = computeMetrics({
+      sex: args.sex,
+      weight_kg: args.weight_kg,
+      height_cm: args.height_cm,
+      age: args.age,
+      activityFactor: args.activityFactor,
+      deficitKcal: args.deficitKcal,
+      targetMode: args.targetMode,
+    });
 
     const existing = await ctx.db
       .query("userProfiles")
@@ -85,19 +82,15 @@ export const updateWeight = mutation({
 
     if (!profile) throw new Error("Profile not found");
 
-    const bmr =
-      profile.sex === "F"
-        ? 10 * args.weight_kg +
-          6.25 * profile.height_cm -
-          5 * profile.age -
-          161
-        : 10 * args.weight_kg +
-          6.25 * profile.height_cm -
-          5 * profile.age +
-          5;
-
-    const tdee = bmr * profile.activityFactor;
-    const targetKcal = tdee - profile.deficitKcal;
+    const { bmr, tdee, targetKcal } = computeMetrics({
+      sex: profile.sex,
+      weight_kg: args.weight_kg,
+      height_cm: profile.height_cm,
+      age: profile.age,
+      activityFactor: profile.activityFactor,
+      deficitKcal: profile.deficitKcal,
+      targetMode: profile.targetMode,
+    });
 
     await ctx.db.patch(profile._id, {
       weight_kg: args.weight_kg,

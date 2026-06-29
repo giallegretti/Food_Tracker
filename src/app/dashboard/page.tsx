@@ -7,6 +7,8 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { UserSwitcher } from "@/components/layout/UserSwitcher";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { DailyRing } from "@/components/dashboard/DailyRing";
+import { BasalReference } from "@/components/dashboard/BasalReference";
+import { WeekSummary } from "@/components/dashboard/WeekSummary";
 import { MacroBreakdown } from "@/components/dashboard/MacroBreakdown";
 import { ModuleCard } from "@/components/meals/ModuleCard";
 import { FoodSearch } from "@/components/food/FoodSearch";
@@ -128,6 +130,8 @@ export default function DashboardPage() {
     );
   }
 
+  const isBasalMode = profile.targetMode === "basal";
+
   const macroTargets = {
     protein: (profile.targetKcal * profile.proteinPct) / 100 / 4,
     carbs: (profile.targetKcal * profile.carbsPct) / 100 / 4,
@@ -240,8 +244,22 @@ export default function DashboardPage() {
       <div className="mx-auto max-w-md px-4 space-y-5">
         {/* Calorie Ring */}
         <div className="flex justify-center pt-2 pb-1">
-          <DailyRing consumed={totals.kcal} target={profile.targetKcal} />
+          <DailyRing
+            consumed={totals.kcal}
+            target={profile.targetKcal}
+            unitNote={isBasalMode ? "basal" : undefined}
+            maintenance={isBasalMode ? profile.tdee : undefined}
+          />
         </div>
+
+        {/* Basal / sedentária reference (modelo meta = basal) */}
+        {isBasalMode && (
+          <BasalReference
+            consumed={totals.kcal}
+            basal={profile.bmr}
+            maintenance={profile.tdee}
+          />
+        )}
 
         {/* Macro Breakdown */}
         <MacroBreakdown
@@ -330,6 +348,20 @@ export default function DashboardPage() {
         >
           + Adicionar alimento extra
         </Button>
+
+        {/* Week summary (modelo meta = basal) */}
+        {isBasalMode && (
+          <div className="space-y-2">
+            <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest px-1">
+              Resumo da semana
+            </h2>
+            <WeekSummary
+              userId={userId}
+              basal={profile.bmr}
+              maintenance={profile.tdee}
+            />
+          </div>
+        )}
 
         {/* Partner View */}
         <PartnerView currentUserId={userId} date={today} />

@@ -47,6 +47,8 @@ export default defineSchema({
     height_cm: v.float64(),
     activityFactor: v.float64(),
     deficitKcal: v.number(),
+    // "basal" → meta do dia = basal; default → meta = TDEE − déficit
+    targetMode: v.optional(v.string()),
     bmr: v.float64(),
     tdee: v.float64(),
     targetKcal: v.float64(),
