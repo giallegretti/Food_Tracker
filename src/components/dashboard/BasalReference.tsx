@@ -9,8 +9,8 @@ interface BasalReferenceProps {
 
 /**
  * Barra "onde o dia caiu": preenchimento verde = consumido, paralelo à roda.
- * Palitos: verde = basal (meta), azul = sedentária (manutenção). Sem rótulos —
- * a cor casa com os chips abaixo.
+ * Palitos: verde = basal (meta), azul = sedentária, laranja = atividade física.
+ * Sem rótulos — a cor casa com os chips abaixo.
  */
 export function BasalReference({
   consumed,
@@ -18,8 +18,8 @@ export function BasalReference({
   maintenance,
   activity,
 }: BasalReferenceProps) {
-  // Escala 0 .. sedentária (com folga de 5% à direita p/ o palito não colar na borda).
-  const max = maintenance * 1.05;
+  // Escala 0 .. atividade (com folga p/ o palito não colar na borda).
+  const max = activity * 1.05;
   const pct = (v: number) => `${Math.min((v / max) * 100, 100)}%`;
 
   return (
@@ -48,11 +48,19 @@ export function BasalReference({
               backgroundColor: "oklch(0.65 0.18 250)",
             }}
           />
+          {/* palito atividade física (laranja) */}
+          <div
+            className="absolute top-0 w-[3px] h-[18px] rounded-sm"
+            style={{
+              left: pct(activity),
+              backgroundColor: "oklch(0.75 0.16 70)",
+            }}
+          />
         </div>
       </div>
 
       <div className="flex gap-2">
-        <div className="flex-1 rounded-xl bg-card p-3 text-center">
+        <div className="flex-1 rounded-xl bg-card p-2 text-center">
           <div className="text-lg font-bold tabular-nums text-emerald-400">
             {Math.round(basal)}
           </div>
@@ -60,7 +68,7 @@ export function BasalReference({
             Basal
           </div>
         </div>
-        <div className="flex-1 rounded-xl bg-card p-3 text-center">
+        <div className="flex-1 rounded-xl bg-card p-2 text-center">
           <div
             className="text-lg font-bold tabular-nums"
             style={{ color: "oklch(0.65 0.18 250)" }}
@@ -71,7 +79,7 @@ export function BasalReference({
             Sedentária
           </div>
         </div>
-        <div className="flex-1 rounded-xl bg-card p-3 text-center">
+        <div className="flex-1 rounded-xl bg-card p-2 text-center">
           <div
             className="text-lg font-bold tabular-nums"
             style={{ color: "oklch(0.75 0.16 70)" }}
@@ -79,7 +87,7 @@ export function BasalReference({
             {Math.round(activity)}
           </div>
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-0.5">
-            Atividade física
+            Atividade
           </div>
         </div>
       </div>

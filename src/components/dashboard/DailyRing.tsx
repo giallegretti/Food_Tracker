@@ -46,9 +46,8 @@ export function DailyRing({
         ? "oklch(0.75 0.17 70)"
         : "oklch(0.72 0.19 155)";
 
-  // No modelo meta = basal a roda mostra só consumo + total (sem rótulo).
-  // No modelo de déficit mantém a pílula "X restam / +X acima".
-  const pill: React.ReactNode = basalMode ? null : (
+  // Pílula "X restam / +X acima" relativa ao alvo (no modelo basal, o alvo é o basal).
+  const pill: React.ReactNode = (
     <span
       className={cn(
         "text-sm font-semibold mt-1.5 px-2 py-0.5 rounded-full",
