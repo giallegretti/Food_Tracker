@@ -167,4 +167,15 @@ export default defineSchema({
   })
     .index("by_user_date", ["userId", "date"])
     .index("by_user", ["userId"]),
+
+  // Treatment dose log (each entry = a dose change, starting on `date`)
+  doseLog: defineTable({
+    userId: v.string(),
+    date: v.string(), // ISO date the dose started/changed
+    dose_mg: v.float64(),
+    medication: v.optional(v.string()), // caneta / medicamento
+    note: v.optional(v.string()),
+  })
+    .index("by_user_date", ["userId", "date"])
+    .index("by_user", ["userId"]),
 });

@@ -19,12 +19,16 @@ import {
   Tooltip,
   ResponsiveContainer,
   ReferenceLine,
+  ReferenceArea,
+  ReferenceDot,
 } from "recharts";
 
 const COL = {
   basal: "oklch(0.72 0.19 155)", // verde — basal / meta
   sed: "oklch(0.65 0.18 250)", // azul — sedentária / manutenção
   leve: "oklch(0.75 0.16 70)", // âmbar — leve 3×/sem
+  peso: "oklch(0.72 0.16 300)", // roxo — curva de peso real
+  dose: "oklch(0.72 0.19 155)", // verde — faixas de dose
 };
 
 function calcBMR(
@@ -42,10 +46,13 @@ function calcBMR(
 
 export default function PesoPage() {
   const { userId, setUserId } = useCurrentUser();
-  const [tab, setTab] = useState<"registro" | "curvas">("registro");
+  const [tab, setTab] = useState<"registro" | "curvas" | "tratamento">(
+    "registro"
+  );
 
   const profile = useQuery(api.userProfiles.getByUserId, { userId });
   const weightHistory = useQuery(api.weightLog.getByUser, { userId });
+  const doseHistory = useQuery(api.doseLog.getByUser, { userId });
 
   return (
     <div className="min-h-screen pb-24">
@@ -69,6 +76,16 @@ export default function PesoPage() {
               Registro
             </button>
             <button
+              onClick={() => setTab("tratamento")}
+              className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
+                tab === "tratamento"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground"
+              }`}
+            >
+              Tratamento
+            </button>
+            <button
               onClick={() => setTab("curvas")}
               className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
                 tab === "curvas"
@@ -88,6 +105,13 @@ export default function PesoPage() {
             userId={userId}
             profile={profile}
             weightHistory={weightHistory}
+          />
+        ) : tab === "tratamento" ? (
+          <TratamentoTab
+            userId={userId}
+            profile={profile}
+            weightHistory={weightHistory}
+            doseHistory={doseHistory}
           />
         ) : (
           <CurvasTab profile={profile} weightHistory={weightHistory} />
@@ -274,6 +298,342 @@ function RegistroTab({
                       }
                     )}
                   </span>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ---------- Tratamento Tab (peso × fases de dose) ---------- */
+
+const DOSE_UNIT = "mg";
+
+function fmtDose(n: number): string {
+  return n.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+}
+
+function tsFromISO(d: string): number {
+  return new Date(d + "T12:00:00").getTime();
+}
+
+function fmtShort(ts: number): string {
+  return new Date(ts).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+  });
+}
+
+function TratamentoTab({
+  userId,
+  profile,
+  weightHistory,
+  doseHistory,
+}: {
+  userId: string;
+  profile: Doc<"userProfiles"> | undefined | null;
+  weightHistory: Doc<"weightLog">[] | undefined;
+  doseHistory: Doc<"doseLog">[] | undefined;
+}) {
+  const [doseDate, setDoseDate] = useState(getTodayISO());
+  const [doseMg, setDoseMg] = useState("");
+  const [doseMed, setDoseMed] = useState("");
+
+  const addDose = useMutation(api.doseLog.addEntry);
+  const removeDose = useMutation(api.doseLog.removeEntry);
+
+  const handleAddDose = async () => {
+    const mg = parseFloat(doseMg.replace(",", "."));
+    if (isNaN(mg) || mg <= 0) return;
+    await addDose({
+      userId,
+      date: doseDate,
+      dose_mg: mg,
+      medication: doseMed.trim() || undefined,
+    });
+    setDoseMg("");
+    setDoseMed("");
+    setDoseDate(getTodayISO());
+  };
+
+  const weights = [...(weightHistory ?? [])].sort((a, b) =>
+    a.date.localeCompare(b.date)
+  );
+  const doses = [...(doseHistory ?? [])].sort((a, b) =>
+    a.date.localeCompare(b.date)
+  );
+
+  const chartData = weights.map((w) => ({
+    t: tsFromISO(w.date),
+    weight: w.weight_kg,
+  }));
+
+  const lastPoint = chartData[chartData.length - 1];
+  const currentWeight = lastPoint?.weight ?? profile?.weight_kg;
+  const currentDose = doses[doses.length - 1];
+
+  // Fases de dose: registro é semanal, então mesclamos semanas consecutivas de
+  // mesma dose numa única faixa (rótulo aparece uma vez por fase, não por semana).
+  const lastTs = lastPoint?.t ?? tsFromISO(getTodayISO());
+  const doseMgs = doses.map((d) => d.dose_mg);
+  const minD = Math.min(...doseMgs);
+  const maxD = Math.max(...doseMgs);
+  const alphaFor = (dose: number) =>
+    doses.length <= 1 || maxD === minD
+      ? 0.13
+      : 0.06 + 0.16 * ((dose - minD) / (maxD - minD));
+
+  const phases: Array<{ x1: number; x2: number; dose: number; alpha: number }> =
+    [];
+  for (let i = 0; i < doses.length; i++) {
+    const start = tsFromISO(doses[i].date);
+    let j = i;
+    while (j + 1 < doses.length && doses[j + 1].dose_mg === doses[i].dose_mg) {
+      j++;
+    }
+    const end = j + 1 < doses.length ? tsFromISO(doses[j + 1].date) : lastTs;
+    phases.push({
+      x1: start,
+      x2: end,
+      dose: doses[i].dose_mg,
+      alpha: alphaFor(doses[i].dose_mg),
+    });
+    i = j;
+  }
+
+  const hasChart = chartData.length > 0;
+
+  return (
+    <>
+      {/* KPIs atuais */}
+      <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-xl bg-card p-3 text-center">
+          <div className="text-2xl font-bold tabular-nums">
+            {currentWeight != null ? formatGrams(currentWeight) : "—"}
+            <span className="text-xs text-muted-foreground font-medium ml-0.5">
+              kg
+            </span>
+          </div>
+          <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mt-0.5">
+            Peso atual
+          </div>
+        </div>
+        <div className="rounded-xl bg-card p-3 text-center">
+          <div className="text-2xl font-bold text-primary tabular-nums">
+            {currentDose ? fmtDose(currentDose.dose_mg) : "—"}
+            <span className="text-xs text-muted-foreground font-medium ml-0.5">
+              {DOSE_UNIT}
+            </span>
+          </div>
+          <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mt-0.5">
+            Dose atual
+          </div>
+        </div>
+      </div>
+
+      {/* Gráfico peso × fases de dose */}
+      <div className="rounded-xl bg-card p-4">
+        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+          Peso × fases de dose
+        </h2>
+        <p className="text-[11px] text-muted-foreground mb-3">
+          A curva mostra seu peso ao longo do tempo. As faixas ao fundo marcam
+          cada dose (mais escura = dose maior).
+        </p>
+
+        {hasChart ? (
+          <div className="h-[260px] -ml-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                data={chartData}
+                margin={{ top: 16, right: 12, bottom: 0, left: 0 }}
+              >
+                <CartesianGrid
+                  stroke="oklch(0.26 0.01 260)"
+                  strokeDasharray="3 3"
+                />
+                {phases.map((p, i) => (
+                  <ReferenceArea
+                    key={i}
+                    x1={p.x1}
+                    x2={p.x2}
+                    fill={COL.dose}
+                    fillOpacity={p.alpha}
+                    stroke="none"
+                    ifOverflow="extendDomain"
+                    label={{
+                      value: `${fmtDose(p.dose)} ${DOSE_UNIT}`,
+                      position: "insideTop",
+                      fill: COL.dose,
+                      fontSize: 9,
+                    }}
+                  />
+                ))}
+                <XAxis
+                  dataKey="t"
+                  type="number"
+                  scale="time"
+                  domain={["dataMin", "dataMax"]}
+                  tick={{ fontSize: 10, fill: "oklch(0.60 0 0)" }}
+                  tickFormatter={(v) => fmtShort(Number(v))}
+                  tickLine={false}
+                  minTickGap={28}
+                />
+                <YAxis
+                  domain={["dataMin - 2", "dataMax + 2"]}
+                  tick={{ fontSize: 10, fill: "oklch(0.60 0 0)" }}
+                  width={44}
+                  tickLine={false}
+                  tickFormatter={(v) => `${v}`}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: "oklch(0.17 0.01 260)",
+                    border: "1px solid oklch(0.26 0.01 260)",
+                    borderRadius: 10,
+                    fontSize: 12,
+                  }}
+                  labelStyle={{ color: "oklch(0.95 0 0)" }}
+                  labelFormatter={(v) => fmtShort(Number(v))}
+                  formatter={(value) => [`${value} kg`, "peso"]}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="weight"
+                  name="peso"
+                  stroke={COL.peso}
+                  strokeWidth={2.5}
+                  dot={{ r: 2.5, fill: COL.peso }}
+                  activeDot={{ r: 4 }}
+                  connectNulls
+                />
+                {lastPoint && (
+                  <ReferenceDot
+                    x={lastPoint.t}
+                    y={lastPoint.weight}
+                    r={4}
+                    fill="oklch(0.95 0 0)"
+                    stroke={COL.peso}
+                    label={{
+                      value: `${formatGrams(lastPoint.weight)}`,
+                      position: "top",
+                      fill: "oklch(0.95 0 0)",
+                      fontSize: 9,
+                    }}
+                  />
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="h-[120px] flex items-center justify-center text-[12px] text-muted-foreground text-center">
+            Registre pesos na aba <b className="mx-1">Registro</b> para ver a
+            curva.
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[11px] text-muted-foreground font-mono">
+          <span className="inline-flex items-center gap-1.5">
+            <i
+              className="w-2.5 h-2.5 rounded-sm inline-block"
+              style={{ background: COL.peso }}
+            />
+            peso (kg)
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <i
+              className="w-3.5 h-2.5 rounded-sm inline-block"
+              style={{ background: COL.dose, opacity: 0.4 }}
+            />
+            fase de dose
+          </span>
+        </div>
+      </div>
+
+      {/* Registrar mudança de dose */}
+      <div className="rounded-xl bg-card p-4 space-y-3">
+        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          Registrar mudança de dose
+        </h2>
+        <div>
+          <label className="text-[11px] text-muted-foreground font-medium mb-1 block">
+            Data da mudança
+          </label>
+          <Input
+            type="date"
+            value={doseDate}
+            max={getTodayISO()}
+            onChange={(e) => setDoseDate(e.target.value)}
+            className="h-11 rounded-xl bg-secondary border-0 text-sm"
+          />
+        </div>
+        <Input
+          type="number"
+          inputMode="decimal"
+          step="0.05"
+          value={doseMg}
+          onChange={(e) => setDoseMg(e.target.value)}
+          placeholder={`Dose em ${DOSE_UNIT} (ex: 0.5)`}
+          className="h-11 rounded-xl bg-secondary border-0 text-sm"
+        />
+        <Input
+          value={doseMed}
+          onChange={(e) => setDoseMed(e.target.value)}
+          placeholder="Caneta / medicamento (opcional)"
+          className="h-11 rounded-xl bg-secondary border-0 text-sm"
+        />
+        <Button
+          className="w-full h-11 rounded-xl font-semibold"
+          onClick={handleAddDose}
+          disabled={!doseMg}
+        >
+          Salvar dose
+        </Button>
+      </div>
+
+      {/* Histórico de doses */}
+      {doses.length > 0 && (
+        <div>
+          <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-2 px-1">
+            Doses registradas
+          </h2>
+          <div className="space-y-1">
+            {[...doses]
+              .sort((a, b) => b.date.localeCompare(a.date))
+              .map((entry) => (
+                <div
+                  key={entry._id}
+                  className="flex items-center justify-between rounded-xl bg-card p-3"
+                >
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-bold tabular-nums">
+                      {fmtDose(entry.dose_mg)} {DOSE_UNIT}
+                    </span>
+                    {entry.medication && (
+                      <span className="text-[11px] text-muted-foreground">
+                        {entry.medication}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[11px] text-muted-foreground tabular-nums">
+                      {new Date(
+                        entry.date + "T12:00:00"
+                      ).toLocaleDateString("pt-BR", {
+                        day: "2-digit",
+                        month: "short",
+                      })}
+                    </span>
+                    <button
+                      onClick={() => removeDose({ id: entry._id })}
+                      className="text-[11px] text-muted-foreground/70 hover:text-red-400 transition-colors"
+                      aria-label="Remover dose"
+                    >
+                      remover
+                    </button>
+                  </div>
                 </div>
               ))}
           </div>

@@ -10,7 +10,9 @@
 
 import type * as customFoods from "../customFoods.js";
 import type * as dailyLog from "../dailyLog.js";
+import type * as doseLog from "../doseLog.js";
 import type * as foods from "../foods.js";
+import type * as lib_calc from "../lib/calc.js";
 import type * as recipes from "../recipes.js";
 import type * as userProfiles from "../userProfiles.js";
 import type * as weightLog from "../weightLog.js";
@@ -24,7 +26,9 @@ import type {
 declare const fullApi: ApiFromModules<{
   customFoods: typeof customFoods;
   dailyLog: typeof dailyLog;
+  doseLog: typeof doseLog;
   foods: typeof foods;
+  "lib/calc": typeof lib_calc;
   recipes: typeof recipes;
   userProfiles: typeof userProfiles;
   weightLog: typeof weightLog;
