@@ -46,9 +46,7 @@ function calcBMR(
 
 export default function PesoPage() {
   const { userId, setUserId } = useCurrentUser();
-  const [tab, setTab] = useState<"registro" | "curvas" | "tratamento">(
-    "registro"
-  );
+  const [tab, setTab] = useState<"tratamento" | "curvas">("tratamento");
 
   const profile = useQuery(api.userProfiles.getByUserId, { userId });
   const weightHistory = useQuery(api.weightLog.getByUser, { userId });
@@ -65,16 +63,6 @@ export default function PesoPage() {
 
           {/* Tab switcher */}
           <div className="flex gap-1 rounded-xl bg-secondary p-1">
-            <button
-              onClick={() => setTab("registro")}
-              className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
-                tab === "registro"
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground"
-              }`}
-            >
-              Registro
-            </button>
             <button
               onClick={() => setTab("tratamento")}
               className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
@@ -100,13 +88,7 @@ export default function PesoPage() {
       </div>
 
       <div className="mx-auto max-w-md px-4 py-3 space-y-4">
-        {tab === "registro" ? (
-          <RegistroTab
-            userId={userId}
-            profile={profile}
-            weightHistory={weightHistory}
-          />
-        ) : tab === "tratamento" ? (
+        {tab === "tratamento" ? (
           <TratamentoTab
             userId={userId}
             profile={profile}
@@ -120,190 +102,6 @@ export default function PesoPage() {
 
       <BottomNav />
     </div>
-  );
-}
-
-/* ---------- Registro Tab ---------- */
-
-function RegistroTab({
-  userId,
-  profile,
-  weightHistory,
-}: {
-  userId: string;
-  profile: Doc<"userProfiles"> | undefined | null;
-  weightHistory: Doc<"weightLog">[] | undefined;
-}) {
-  const [newWeight, setNewWeight] = useState("");
-  const [note, setNote] = useState("");
-  const [selectedDate, setSelectedDate] = useState(getTodayISO());
-
-  const addWeight = useMutation(api.weightLog.addEntry);
-
-  const handleAddWeight = async () => {
-    const weight = parseFloat(newWeight.replace(",", "."));
-    if (isNaN(weight) || weight <= 0) return;
-
-    await addWeight({
-      userId,
-      date: selectedDate,
-      weight_kg: weight,
-      note: note.trim() || undefined,
-    });
-
-    setNewWeight("");
-    setNote("");
-    setSelectedDate(getTodayISO());
-  };
-
-  const initialWeight = 112;
-  // Current weight = most recent by DATE, not by insertion order
-  const mostRecentEntry = weightHistory
-    ? [...weightHistory].sort((a, b) => b.date.localeCompare(a.date))[0]
-    : undefined;
-  const currentWeight = mostRecentEntry?.weight_kg ?? profile?.weight_kg ?? initialWeight;
-  const totalLost = initialWeight - currentWeight;
-  const nextThreshold = Math.floor(totalLost / 5) * 5 + 5;
-  const kgToNextRecalc = nextThreshold - totalLost;
-
-  return (
-    <>
-      {/* Current stats */}
-      {profile && (
-        <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-xl bg-card p-3 text-center">
-            <div className="text-2xl font-bold tabular-nums">
-              {formatGrams(currentWeight)}
-            </div>
-            <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mt-0.5">
-              Peso (kg)
-            </div>
-          </div>
-          <div className="rounded-xl bg-card p-3 text-center">
-            <div className="text-2xl font-bold text-primary tabular-nums">
-              {Math.round(profile.targetKcal)}
-            </div>
-            <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mt-0.5">
-              Meta kcal/dia
-            </div>
-          </div>
-          <div className="rounded-xl bg-card p-3 text-center">
-            <div className="text-2xl font-bold tabular-nums">
-              {Math.round(profile.bmr)}
-            </div>
-            <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mt-0.5">
-              BMR
-            </div>
-          </div>
-          <div className="rounded-xl bg-card p-3 text-center">
-            <div className="text-2xl font-bold tabular-nums">
-              {Math.round(profile.tdee)}
-            </div>
-            <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mt-0.5">
-              TDEE
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TDEE recalc alert */}
-      {kgToNextRecalc <= 2 && totalLost > 0 && (
-        <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-3">
-          <p className="text-sm font-semibold text-amber-400">
-            Faltam {formatGrams(kgToNextRecalc)} kg para recalcular o TDEE!
-          </p>
-          <p className="text-[11px] text-muted-foreground mt-1">
-            A cada 5kg perdidos o metabolismo se adapta. Registre seu peso para
-            atualizar automaticamente.
-          </p>
-        </div>
-      )}
-
-      {/* Add weight form */}
-      <div className="rounded-xl bg-card p-4 space-y-3">
-        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-          Registrar peso
-        </h2>
-        <div>
-          <label className="text-[11px] text-muted-foreground font-medium mb-1 block">
-            Data
-          </label>
-          <Input
-            type="date"
-            value={selectedDate}
-            max={getTodayISO()}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="h-11 rounded-xl bg-secondary border-0 text-sm"
-          />
-        </div>
-        <Input
-          type="number"
-          inputMode="decimal"
-          step="0.1"
-          value={newWeight}
-          onChange={(e) => setNewWeight(e.target.value)}
-          placeholder="Peso em kg (ex: 110.5)"
-          className="h-11 rounded-xl bg-secondary border-0 text-sm"
-        />
-        <Input
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="Nota (opcional)"
-          className="h-11 rounded-xl bg-secondary border-0 text-sm"
-        />
-        <Button
-          className="w-full h-11 rounded-xl font-semibold"
-          onClick={handleAddWeight}
-          disabled={!newWeight}
-        >
-          Salvar
-        </Button>
-      </div>
-
-      {/* Weight history */}
-      {weightHistory && weightHistory.length > 0 && (
-        <div>
-          <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-2 px-1">
-            Historico
-          </h2>
-          <div className="space-y-1">
-            {[...weightHistory]
-              .sort((a, b) => a.date.localeCompare(b.date))
-              .map((entry) => (
-                <div
-                  key={entry._id}
-                  className="flex items-center justify-between rounded-xl bg-card p-3"
-                >
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-bold tabular-nums">
-                      {formatGrams(entry.weight_kg)} kg
-                    </span>
-                    {entry.note && (
-                      <span className="text-[11px] text-muted-foreground">
-                        {entry.note}
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-[11px] text-muted-foreground tabular-nums">
-                    {new Date(entry.date + "T12:00:00").toLocaleDateString(
-                      "pt-BR",
-                      {
-                        day: "2-digit",
-                        month: "short",
-                        year:
-                          entry.date.substring(0, 4) !==
-                          getTodayISO().substring(0, 4)
-                            ? "numeric"
-                            : undefined,
-                      }
-                    )}
-                  </span>
-                </div>
-              ))}
-          </div>
-        </div>
-      )}
-    </>
   );
 }
 
@@ -337,10 +135,32 @@ function TratamentoTab({
   weightHistory: Doc<"weightLog">[] | undefined;
   doseHistory: Doc<"doseLog">[] | undefined;
 }) {
+  const [historyTab, setHistoryTab] = useState<"peso" | "doses">("peso");
+
+  // Registro de peso
+  const [newWeight, setNewWeight] = useState("");
+  const [weightNote, setWeightNote] = useState("");
+  const [weightDate, setWeightDate] = useState(getTodayISO());
+  const addWeight = useMutation(api.weightLog.addEntry);
+
+  const handleAddWeight = async () => {
+    const weight = parseFloat(newWeight.replace(",", "."));
+    if (isNaN(weight) || weight <= 0) return;
+    await addWeight({
+      userId,
+      date: weightDate,
+      weight_kg: weight,
+      note: weightNote.trim() || undefined,
+    });
+    setNewWeight("");
+    setWeightNote("");
+    setWeightDate(getTodayISO());
+  };
+
+  // Registro de dose
   const [doseDate, setDoseDate] = useState(getTodayISO());
   const [doseMg, setDoseMg] = useState("");
   const [doseMed, setDoseMed] = useState("");
-
   const addDose = useMutation(api.doseLog.addEntry);
   const removeDose = useMutation(api.doseLog.removeEntry);
 
@@ -375,8 +195,18 @@ function TratamentoTab({
     }));
 
   const lastPoint = chartData[chartData.length - 1];
-  const currentWeight = lastPoint?.weight ?? profile?.weight_kg;
   const currentDose = doses[doses.length - 1];
+
+  // Peso atual = registro mais recente por DATA (não pela ordem de inserção)
+  const initialWeight = 112;
+  const mostRecentEntry = [...weights].sort((a, b) =>
+    b.date.localeCompare(a.date)
+  )[0];
+  const currentWeight =
+    mostRecentEntry?.weight_kg ?? profile?.weight_kg ?? initialWeight;
+  const totalLost = initialWeight - currentWeight;
+  const nextThreshold = Math.floor(totalLost / 5) * 5 + 5;
+  const kgToNextRecalc = nextThreshold - totalLost;
 
   // Fases de dose: registro é semanal, então mesclamos semanas consecutivas de
   // mesma dose numa única faixa (rótulo aparece uma vez por fase, não por semana).
@@ -435,7 +265,40 @@ function TratamentoTab({
             Dose atual
           </div>
         </div>
+        {profile && (
+          <>
+            <div className="rounded-xl bg-card p-3 text-center">
+              <div className="text-2xl font-bold tabular-nums">
+                {Math.round(profile.targetKcal)}
+              </div>
+              <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mt-0.5">
+                Meta kcal/dia
+              </div>
+            </div>
+            <div className="rounded-xl bg-card p-3 text-center">
+              <div className="text-2xl font-bold tabular-nums">
+                {Math.round(profile.tdee)}
+              </div>
+              <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mt-0.5">
+                TDEE
+              </div>
+            </div>
+          </>
+        )}
       </div>
+
+      {/* TDEE recalc alert */}
+      {kgToNextRecalc <= 2 && totalLost > 0 && (
+        <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-3">
+          <p className="text-sm font-semibold text-amber-400">
+            Faltam {formatGrams(kgToNextRecalc)} kg para recalcular o TDEE!
+          </p>
+          <p className="text-[11px] text-muted-foreground mt-1">
+            A cada 5kg perdidos o metabolismo se adapta. Registre seu peso para
+            atualizar automaticamente.
+          </p>
+        </div>
+      )}
 
       {/* Gráfico peso × fases de dose */}
       <div className="rounded-xl bg-card p-4">
@@ -533,8 +396,7 @@ function TratamentoTab({
           </div>
         ) : (
           <div className="h-[120px] flex items-center justify-center text-[12px] text-muted-foreground text-center">
-            Registre pesos na aba <b className="mx-1">Registro</b> para ver a
-            curva.
+            Registre seu peso abaixo para ver a curva.
           </div>
         )}
 
@@ -554,6 +416,47 @@ function TratamentoTab({
             fase de dose
           </span>
         </div>
+      </div>
+
+      {/* Registrar peso */}
+      <div className="rounded-xl bg-card p-4 space-y-3">
+        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          Registrar peso
+        </h2>
+        <div>
+          <label className="text-[11px] text-muted-foreground font-medium mb-1 block">
+            Data
+          </label>
+          <Input
+            type="date"
+            value={weightDate}
+            max={getTodayISO()}
+            onChange={(e) => setWeightDate(e.target.value)}
+            className="h-11 rounded-xl bg-secondary border-0 text-sm"
+          />
+        </div>
+        <Input
+          type="number"
+          inputMode="decimal"
+          step="0.1"
+          value={newWeight}
+          onChange={(e) => setNewWeight(e.target.value)}
+          placeholder="Peso em kg (ex: 110.5)"
+          className="h-11 rounded-xl bg-secondary border-0 text-sm"
+        />
+        <Input
+          value={weightNote}
+          onChange={(e) => setWeightNote(e.target.value)}
+          placeholder="Nota (opcional)"
+          className="h-11 rounded-xl bg-secondary border-0 text-sm"
+        />
+        <Button
+          className="w-full h-11 rounded-xl font-semibold"
+          onClick={handleAddWeight}
+          disabled={!newWeight}
+        >
+          Salvar peso
+        </Button>
       </div>
 
       {/* Registrar mudança de dose */}
@@ -597,12 +500,74 @@ function TratamentoTab({
         </Button>
       </div>
 
-      {/* Histórico de doses */}
-      {doses.length > 0 && (
-        <div>
-          <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-2 px-1">
-            Doses registradas
-          </h2>
+      {/* Históricos (sub-abas) */}
+      <div>
+        <div className="flex gap-1 rounded-xl bg-secondary p-1 mb-2">
+          <button
+            onClick={() => setHistoryTab("peso")}
+            className={`flex-1 rounded-lg py-1.5 text-[13px] font-medium transition-colors ${
+              historyTab === "peso"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground"
+            }`}
+          >
+            Histórico de peso
+          </button>
+          <button
+            onClick={() => setHistoryTab("doses")}
+            className={`flex-1 rounded-lg py-1.5 text-[13px] font-medium transition-colors ${
+              historyTab === "doses"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground"
+            }`}
+          >
+            Doses
+          </button>
+        </div>
+
+        {historyTab === "peso" ? (
+          weights.length > 0 ? (
+            <div className="space-y-1">
+              {[...weights]
+                .sort((a, b) => b.date.localeCompare(a.date))
+                .map((entry) => (
+                  <div
+                    key={entry._id}
+                    className="flex items-center justify-between rounded-xl bg-card p-3"
+                  >
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-bold tabular-nums">
+                        {formatGrams(entry.weight_kg)} kg
+                      </span>
+                      {entry.note && (
+                        <span className="text-[11px] text-muted-foreground">
+                          {entry.note}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[11px] text-muted-foreground tabular-nums">
+                      {new Date(entry.date + "T12:00:00").toLocaleDateString(
+                        "pt-BR",
+                        {
+                          day: "2-digit",
+                          month: "short",
+                          year:
+                            entry.date.substring(0, 4) !==
+                            getTodayISO().substring(0, 4)
+                              ? "numeric"
+                              : undefined,
+                        }
+                      )}
+                    </span>
+                  </div>
+                ))}
+            </div>
+          ) : (
+            <p className="text-[12px] text-muted-foreground text-center py-6">
+              Nenhum peso registrado ainda.
+            </p>
+          )
+        ) : doses.length > 0 ? (
           <div className="space-y-1">
             {[...doses]
               .sort((a, b) => b.date.localeCompare(a.date))
@@ -623,12 +588,13 @@ function TratamentoTab({
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-[11px] text-muted-foreground tabular-nums">
-                      {new Date(
-                        entry.date + "T12:00:00"
-                      ).toLocaleDateString("pt-BR", {
-                        day: "2-digit",
-                        month: "short",
-                      })}
+                      {new Date(entry.date + "T12:00:00").toLocaleDateString(
+                        "pt-BR",
+                        {
+                          day: "2-digit",
+                          month: "short",
+                        }
+                      )}
                     </span>
                     <button
                       onClick={() => removeDose({ id: entry._id })}
@@ -641,8 +607,12 @@ function TratamentoTab({
                 </div>
               ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <p className="text-[12px] text-muted-foreground text-center py-6">
+            Nenhuma dose registrada ainda.
+          </p>
+        )}
+      </div>
     </>
   );
 }
