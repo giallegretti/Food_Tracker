@@ -139,7 +139,6 @@ function TratamentoTab({
 
   // Registro de peso
   const [newWeight, setNewWeight] = useState("");
-  const [weightNote, setWeightNote] = useState("");
   const [weightDate, setWeightDate] = useState(getTodayISO());
   const addWeight = useMutation(api.weightLog.addEntry);
 
@@ -150,10 +149,8 @@ function TratamentoTab({
       userId,
       date: weightDate,
       weight_kg: weight,
-      note: weightNote.trim() || undefined,
     });
     setNewWeight("");
-    setWeightNote("");
     setWeightDate(getTodayISO());
   };
 
@@ -198,15 +195,10 @@ function TratamentoTab({
   const currentDose = doses[doses.length - 1];
 
   // Peso atual = registro mais recente por DATA (não pela ordem de inserção)
-  const initialWeight = 112;
   const mostRecentEntry = [...weights].sort((a, b) =>
     b.date.localeCompare(a.date)
   )[0];
-  const currentWeight =
-    mostRecentEntry?.weight_kg ?? profile?.weight_kg ?? initialWeight;
-  const totalLost = initialWeight - currentWeight;
-  const nextThreshold = Math.floor(totalLost / 5) * 5 + 5;
-  const kgToNextRecalc = nextThreshold - totalLost;
+  const currentWeight = mostRecentEntry?.weight_kg ?? profile?.weight_kg;
 
   // Fases de dose: registro é semanal, então mesclamos semanas consecutivas de
   // mesma dose numa única faixa (rótulo aparece uma vez por fase, não por semana).
@@ -265,51 +257,10 @@ function TratamentoTab({
             Dose atual
           </div>
         </div>
-        {profile && (
-          <>
-            <div className="rounded-xl bg-card p-3 text-center">
-              <div className="text-2xl font-bold tabular-nums">
-                {Math.round(profile.targetKcal)}
-              </div>
-              <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mt-0.5">
-                Meta kcal/dia
-              </div>
-            </div>
-            <div className="rounded-xl bg-card p-3 text-center">
-              <div className="text-2xl font-bold tabular-nums">
-                {Math.round(profile.tdee)}
-              </div>
-              <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mt-0.5">
-                TDEE
-              </div>
-            </div>
-          </>
-        )}
       </div>
-
-      {/* TDEE recalc alert */}
-      {kgToNextRecalc <= 2 && totalLost > 0 && (
-        <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-3">
-          <p className="text-sm font-semibold text-amber-400">
-            Faltam {formatGrams(kgToNextRecalc)} kg para recalcular o TDEE!
-          </p>
-          <p className="text-[11px] text-muted-foreground mt-1">
-            A cada 5kg perdidos o metabolismo se adapta. Registre seu peso para
-            atualizar automaticamente.
-          </p>
-        </div>
-      )}
 
       {/* Gráfico peso × fases de dose */}
       <div className="rounded-xl bg-card p-4">
-        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-          Peso × fases de dose
-        </h2>
-        <p className="text-[11px] text-muted-foreground mb-3">
-          A curva mostra seu peso ao longo do tempo. As faixas ao fundo marcam
-          cada dose (mais escura = dose maior).
-        </p>
-
         {hasChart ? (
           <div className="h-[260px] -ml-2">
             <ResponsiveContainer width="100%" height="100%">
@@ -399,23 +350,6 @@ function TratamentoTab({
             Registre seu peso abaixo para ver a curva.
           </div>
         )}
-
-        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[11px] text-muted-foreground font-mono">
-          <span className="inline-flex items-center gap-1.5">
-            <i
-              className="w-2.5 h-2.5 rounded-sm inline-block"
-              style={{ background: COL.peso }}
-            />
-            peso (kg)
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <i
-              className="w-3.5 h-2.5 rounded-sm inline-block"
-              style={{ background: COL.dose, opacity: 0.4 }}
-            />
-            fase de dose
-          </span>
-        </div>
       </div>
 
       {/* Registrar peso */}
@@ -442,12 +376,6 @@ function TratamentoTab({
           value={newWeight}
           onChange={(e) => setNewWeight(e.target.value)}
           placeholder="Peso em kg (ex: 110.5)"
-          className="h-11 rounded-xl bg-secondary border-0 text-sm"
-        />
-        <Input
-          value={weightNote}
-          onChange={(e) => setWeightNote(e.target.value)}
-          placeholder="Nota (opcional)"
           className="h-11 rounded-xl bg-secondary border-0 text-sm"
         />
         <Button
@@ -539,11 +467,6 @@ function TratamentoTab({
                       <span className="font-bold tabular-nums">
                         {formatGrams(entry.weight_kg)} kg
                       </span>
-                      {entry.note && (
-                        <span className="text-[11px] text-muted-foreground">
-                          {entry.note}
-                        </span>
-                      )}
                     </div>
                     <span className="text-[11px] text-muted-foreground tabular-nums">
                       {new Date(entry.date + "T12:00:00").toLocaleDateString(
@@ -659,14 +582,6 @@ function CurvasTab({
   return (
     <>
       <div className="rounded-xl bg-card p-4">
-        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-          Gasto conforme o peso cai
-        </h2>
-        <p className="text-[11px] text-muted-foreground mb-3">
-          {isBasalMode
-            ? "Sua meta segue a linha do basal. A diferença até a sedentária + remédio + exercício é o emagrecimento."
-            : "Basal, sedentária (×1,2) e leve (×1,375) por peso. Mifflin-St Jeor."}
-        </p>
         <div className="h-[240px] -ml-2">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
