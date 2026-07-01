@@ -365,10 +365,14 @@ function TratamentoTab({
     a.date.localeCompare(b.date)
   );
 
-  const chartData = weights.map((w) => ({
-    t: tsFromISO(w.date),
-    weight: w.weight_kg,
-  }));
+  // A curva mostra só o período do tratamento (do 1º registro de dose em diante).
+  const treatmentStart = doses.length > 0 ? doses[0].date : null;
+  const chartData = weights
+    .filter((w) => !treatmentStart || w.date >= treatmentStart)
+    .map((w) => ({
+      t: tsFromISO(w.date),
+      weight: w.weight_kg,
+    }));
 
   const lastPoint = chartData[chartData.length - 1];
   const currentWeight = lastPoint?.weight ?? profile?.weight_kg;
