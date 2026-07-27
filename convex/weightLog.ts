@@ -87,3 +87,39 @@ export const addEntry = mutation({
     }
   },
 });
+
+export const removeEntry = mutation({
+  args: { id: v.id("weightLog") },
+  handler: async (ctx, args) => {
+    const entry = await ctx.db.get(args.id);
+    if (!entry) return;
+
+    await ctx.db.delete(args.id);
+
+    // addEntry keeps the profile (weight_kg/bmr/tdee/targetKcal) in sync with
+    // the most recent entry, so after a delete we must re-sync it to whatever
+    // entry is now the most recent — otherwise the profile stays pinned to the
+    // value we just removed. Each entry already stores its own metrics, so we
+    // just reuse them (no need to recompute).
+    const remaining = await ctx.db
+      .query("weightLog")
+      .withIndex("by_user", (q) => q.eq("userId", entry.userId))
+      .collect();
+    if (remaining.length === 0) return;
+
+    const mostRecent = remaining.reduce((a, b) => (b.date > a.date ? b : a));
+
+    const profile = await ctx.db
+      .query("userProfiles")
+      .withIndex("by_userId", (q) => q.eq("userId", entry.userId))
+      .first();
+    if (!profile) return;
+
+    await ctx.db.patch(profile._id, {
+      weight_kg: mostRecent.weight_kg,
+      bmr: mostRecent.bmr,
+      tdee: mostRecent.tdee,
+      targetKcal: mostRecent.targetKcal,
+    });
+  },
+});

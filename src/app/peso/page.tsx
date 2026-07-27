@@ -140,7 +140,9 @@ function TratamentoTab({
   // Registro de peso
   const [newWeight, setNewWeight] = useState("");
   const [weightDate, setWeightDate] = useState(getTodayISO());
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const addWeight = useMutation(api.weightLog.addEntry);
+  const removeWeight = useMutation(api.weightLog.removeEntry);
 
   const handleAddWeight = async () => {
     const weight = parseFloat(newWeight.replace(",", "."));
@@ -468,20 +470,42 @@ function TratamentoTab({
                         {formatGrams(entry.weight_kg)} kg
                       </span>
                     </div>
-                    <span className="text-[11px] text-muted-foreground tabular-nums">
-                      {new Date(entry.date + "T12:00:00").toLocaleDateString(
-                        "pt-BR",
-                        {
-                          day: "2-digit",
-                          month: "short",
-                          year:
-                            entry.date.substring(0, 4) !==
-                            getTodayISO().substring(0, 4)
-                              ? "numeric"
-                              : undefined,
-                        }
+                    <div className="flex items-center gap-3">
+                      <span className="text-[11px] text-muted-foreground tabular-nums">
+                        {new Date(entry.date + "T12:00:00").toLocaleDateString(
+                          "pt-BR",
+                          {
+                            day: "2-digit",
+                            month: "short",
+                            year:
+                              entry.date.substring(0, 4) !==
+                              getTodayISO().substring(0, 4)
+                                ? "numeric"
+                                : undefined,
+                          }
+                        )}
+                      </span>
+                      {confirmDeleteId === entry._id ? (
+                        <button
+                          onClick={async () => {
+                            await removeWeight({ id: entry._id });
+                            setConfirmDeleteId(null);
+                          }}
+                          className="text-[11px] font-medium text-red-400 hover:text-red-300 transition-colors"
+                          aria-label="Confirmar exclusão do peso"
+                        >
+                          confirmar
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmDeleteId(entry._id)}
+                          className="text-[11px] text-muted-foreground/70 hover:text-red-400 transition-colors"
+                          aria-label="Remover peso"
+                        >
+                          remover
+                        </button>
                       )}
-                    </span>
+                    </div>
                   </div>
                 ))}
             </div>
