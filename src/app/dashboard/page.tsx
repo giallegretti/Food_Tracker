@@ -179,7 +179,7 @@ export default function DashboardPage() {
       >
         <SheetContent
           side="bottom"
-          className="data-[side=bottom]:h-[92dvh] gap-0 rounded-t-2xl border-t border-border/50"
+          className="gap-0 rounded-t-2xl border-t border-border/50"
         >
           {activeModule && (
             <MealEditor
