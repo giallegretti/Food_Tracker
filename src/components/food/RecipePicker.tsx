@@ -28,6 +28,8 @@ export function RecipePicker({ onSelect }: RecipePickerProps) {
         placeholder="Filtrar receitas..."
         className="h-12 rounded-xl bg-secondary border-0 text-base placeholder:text-muted-foreground/60"
         autoComplete="off"
+        enterKeyHint="search"
+        data-reveal="start"
       />
 
       <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
@@ -42,7 +44,7 @@ export function RecipePicker({ onSelect }: RecipePickerProps) {
               : `Nenhuma receita encontrada para "${search}"`}
           </div>
         ) : (
-          <div className="max-h-[40vh] overflow-y-auto overscroll-contain divide-y divide-border/30">
+          <div className="max-h-[calc(var(--vvh,100dvh)*0.45)] overflow-y-auto overscroll-contain divide-y divide-border/30">
             {filtered.map((recipe) => (
               <button
                 key={recipe._id}

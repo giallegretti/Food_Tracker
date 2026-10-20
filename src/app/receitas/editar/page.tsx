@@ -141,7 +141,7 @@ function EditarReceitaContent() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Ex: Marmita de frango com arroz"
-            className="h-11 rounded-xl bg-secondary border-0 text-sm"
+            className="h-11 rounded-xl bg-secondary border-0 text-base"
           />
         </div>
 

@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { UserSwitcher } from "@/components/layout/UserSwitcher";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,7 +44,7 @@ function calcBMR(
 /* ---------- Main Page ---------- */
 
 export default function PesoPage() {
-  const { userId, setUserId } = useCurrentUser();
+  const { userId } = useCurrentUser();
   const [tab, setTab] = useState<"tratamento" | "curvas">("tratamento");
 
   const profile = useQuery(api.userProfiles.getByUserId, { userId });
@@ -56,10 +55,7 @@ export default function PesoPage() {
     <div className="min-h-screen pb-24">
       <div className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl safe-top">
         <div className="mx-auto max-w-md px-4 py-3 space-y-2">
-          <div className="flex items-center justify-between">
-            <h1 className="text-base font-bold tracking-tight">Peso</h1>
-            <UserSwitcher userId={userId} onSwitch={setUserId} />
-          </div>
+          <h1 className="text-base font-bold tracking-tight">Peso</h1>
 
           {/* Tab switcher */}
           <div className="flex gap-1 rounded-xl bg-secondary p-1">
@@ -368,7 +364,7 @@ function TratamentoTab({
             value={weightDate}
             max={getTodayISO()}
             onChange={(e) => setWeightDate(e.target.value)}
-            className="h-11 rounded-xl bg-secondary border-0 text-sm"
+            className="h-11 rounded-xl bg-secondary border-0 text-base"
           />
         </div>
         <Input
@@ -378,7 +374,7 @@ function TratamentoTab({
           value={newWeight}
           onChange={(e) => setNewWeight(e.target.value)}
           placeholder="Peso em kg (ex: 110.5)"
-          className="h-11 rounded-xl bg-secondary border-0 text-sm"
+          className="h-11 rounded-xl bg-secondary border-0 text-base"
         />
         <Button
           className="w-full h-11 rounded-xl font-semibold"
@@ -403,7 +399,7 @@ function TratamentoTab({
             value={doseDate}
             max={getTodayISO()}
             onChange={(e) => setDoseDate(e.target.value)}
-            className="h-11 rounded-xl bg-secondary border-0 text-sm"
+            className="h-11 rounded-xl bg-secondary border-0 text-base"
           />
         </div>
         <Input
@@ -413,13 +409,13 @@ function TratamentoTab({
           value={doseMg}
           onChange={(e) => setDoseMg(e.target.value)}
           placeholder={`Dose em ${DOSE_UNIT} (ex: 0.5)`}
-          className="h-11 rounded-xl bg-secondary border-0 text-sm"
+          className="h-11 rounded-xl bg-secondary border-0 text-base"
         />
         <Input
           value={doseMed}
           onChange={(e) => setDoseMed(e.target.value)}
           placeholder="Caneta / medicamento (opcional)"
-          className="h-11 rounded-xl bg-secondary border-0 text-sm"
+          className="h-11 rounded-xl bg-secondary border-0 text-base"
         />
         <Button
           className="w-full h-11 rounded-xl font-semibold"

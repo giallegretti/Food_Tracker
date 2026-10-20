@@ -123,6 +123,8 @@ export function FoodSearch({
         autoCorrect="off"
         autoCapitalize="off"
         spellCheck={false}
+        enterKeyHint="search"
+        data-reveal="start"
       />
 
       {isSearching && (
@@ -149,7 +151,7 @@ export function FoodSearch({
             </div>
           ) : (
             <>
-              <div className="max-h-[40vh] overflow-y-auto overscroll-contain divide-y divide-border/30">
+              <div className="max-h-[calc(var(--vvh,100dvh)*0.45)] overflow-y-auto overscroll-contain divide-y divide-border/30">
                 {(results ?? []).map((food) => (
                   <button
                     key={String(food._id)}
@@ -210,7 +212,7 @@ export function FoodSearch({
                   Nenhum resultado nas bases externas
                 </div>
               ) : (
-                <div className="max-h-[30vh] overflow-y-auto overscroll-contain divide-y divide-border/30">
+                <div className="max-h-[calc(var(--vvh,100dvh)*0.35)] overflow-y-auto overscroll-contain divide-y divide-border/30">
                   {offResults.map((product, i) => (
                     <button
                       key={i}

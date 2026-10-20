@@ -105,4 +105,17 @@
   .safe-top {
     padding-top: env(safe-area-inset-top, 0px);
   }
+
+  /* Com o teclado aberto a barra inferior só rouba espaço do formulário */
+  html[data-keyboard="open"] .hide-on-keyboard {
+    display: none;
+  }
+
+  /* Rodapé de drawer: respeita a barra do iPhone, mas não com o teclado aberto */
+  .sheet-footer-safe {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+  }
+  html[data-keyboard="open"] .sheet-footer-safe {
+    padding-bottom: 0.75rem;
+  }
 }

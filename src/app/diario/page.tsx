@@ -1,30 +1,22 @@
 "use client";
 
-import { useState, useCallback, Suspense } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useState, Suspense } from "react";
+import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { UserSwitcher } from "@/components/layout/UserSwitcher";
 import { BottomNav } from "@/components/layout/BottomNav";
-import { FoodSearch } from "@/components/food/FoodSearch";
-import { PortionInput } from "@/components/food/PortionInput";
-import { RecipePicker } from "@/components/food/RecipePicker";
 import { ModuleCard } from "@/components/meals/ModuleCard";
+import { MealEditor } from "@/components/meals/MealEditor";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
+  SheetBody,
   SheetContent,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import {
-  MODULE_ORDER,
-  MODULE_LABELS,
-  getTodayISO,
-  formatKcal,
-} from "@/lib/constants";
+import { MODULE_ORDER, getTodayISO, formatKcal } from "@/lib/constants";
 import { Doc } from "../../../convex/_generated/dataModel";
-import type { FoodItem } from "@/components/food/FoodSearch";
 
 /* ---------- Types ---------- */
 type DaySummary = {
@@ -156,139 +148,46 @@ function DayEditor({
   date,
   profile,
   dayTargetKcal,
-  onClose,
 }: {
   userId: string;
   date: string;
   profile: Doc<"userProfiles">;
   dayTargetKcal: number;
-  onClose: () => void;
 }) {
   const today = getTodayISO();
   const entries = useQuery(api.dailyLog.getByDate, { userId, date });
   const totals = useQuery(api.dailyLog.getDailyTotals, { userId, date });
 
-  const addEntry = useMutation(api.dailyLog.addEntry);
-  const removeItem = useMutation(api.dailyLog.removeItem);
-  const updateItem = useMutation(api.dailyLog.updateItem);
-  const shareModuleEntries = useMutation(api.dailyLog.shareModuleEntries);
-  const copyModuleToDate = useMutation(api.dailyLog.copyModuleToDate);
-
   const [activeModule, setActiveModule] = useState<string | null>(null);
-  const [copyTargetDate, setCopyTargetDate] = useState("");
-  const [copyOpen, setCopyOpen] = useState(false);
-  const [copiedTo, setCopiedTo] = useState<string | null>(null);
-  const [addTab, setAddTab] = useState<"alimentos" | "receitas">("alimentos");
-  const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null);
-  const [pendingItems, setPendingItems] = useState<
-    Array<{
-      foodId?: Doc<"foods">["_id"];
-      name: string;
-      portionGrams: number;
-      energy_kcal: number;
-      protein_g: number;
-      carbs_g: number;
-      lipids_g: number;
-    }>
-  >([]);
-  const [shareWithPartner, setShareWithPartner] = useState(false);
-  const [sharedModule, setSharedModule] = useState<string | null>(null);
-  const [editingItem, setEditingItem] = useState<{
-    entryId: Doc<"dailyLogEntries">["_id"];
-    itemIndex: number;
-  } | null>(null);
-  const partnerId = userId === "giovanna" ? "ricardo" : "giovanna";
-  const partnerName = partnerId === "ricardo" ? "Ricardo" : "Giovanna";
-
-  const handleAddFood = useCallback(
-    (food: FoodItem, grams: number) => {
-      const factor = grams / 100;
-      setPendingItems((prev) => [
-        ...prev,
-        {
-          foodId: food.isCustom ? undefined : (food._id as Doc<"foods">["_id"]),
-          name: food.name,
-          portionGrams: grams,
-          energy_kcal: food.energy_kcal * factor,
-          protein_g: food.protein_g * factor,
-          carbs_g: food.carbs_g * factor,
-          lipids_g: food.lipids_g * factor,
-        },
-      ]);
-      setSelectedFood(null);
-    },
-    []
-  );
-
-  const handleAddRecipe = useCallback((recipe: Doc<"recipes">) => {
-    const items = recipe.items.map((item) => ({
-      foodId: item.foodId,
-      name: item.name,
-      portionGrams: item.portionGrams,
-      energy_kcal: item.energy_kcal,
-      protein_g: item.protein_g,
-      carbs_g: item.carbs_g,
-      lipids_g: item.lipids_g,
-    }));
-    setPendingItems((prev) => [...prev, ...items]);
-    setAddTab("alimentos");
-  }, []);
-
-  const handleSaveModule = useCallback(async () => {
-    if (!activeModule || pendingItems.length === 0) return;
-    await addEntry({
-      userId,
-      date,
-      module: activeModule,
-      items: pendingItems,
-      alsoForUserId: shareWithPartner ? partnerId : undefined,
-    });
-    setPendingItems([]);
-    setShareWithPartner(false);
-  }, [activeModule, pendingItems, userId, date, addEntry, shareWithPartner, partnerId]);
-
-  const handleShareModule = useCallback(
-    async (mod: string) => {
-      await shareModuleEntries({
-        userId,
-        date,
-        module: mod,
-        targetUserId: partnerId,
-      });
-      setSharedModule(mod);
-      setTimeout(() => setSharedModule(null), 2000);
-    },
-    [userId, date, partnerId, shareModuleEntries]
-  );
-
-  const handleCopyModule = useCallback(
-    async (mod: string) => {
-      if (!copyTargetDate || copyTargetDate === date) return;
-      await copyModuleToDate({
-        userId,
-        fromDate: date,
-        module: mod,
-        toDate: copyTargetDate,
-      });
-      const label = new Date(copyTargetDate + "T12:00:00").toLocaleDateString(
-        "pt-BR",
-        { day: "numeric", month: "short" }
-      );
-      setCopiedTo(label);
-      setCopyOpen(false);
-      setCopyTargetDate("");
-      setTimeout(() => setCopiedTo(null), 2500);
-    },
-    [userId, date, copyTargetDate, copyModuleToDate]
-  );
 
   if (!totals || !entries) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <SheetBody className="flex items-center justify-center py-12">
         <span className="text-muted-foreground animate-pulse">
           Carregando...
         </span>
-      </div>
+      </SheetBody>
+    );
+  }
+
+  const isEditable = date <= today;
+
+  if (activeModule !== null) {
+    return (
+      <MealEditor
+        key={activeModule}
+        userId={userId}
+        date={date}
+        module={activeModule}
+        entries={entries}
+        editable={isEditable}
+        targetKcal={
+          activeModule !== "extra"
+            ? profile.modules[activeModule as keyof typeof profile.modules]
+            : undefined
+        }
+        onBack={() => setActiveModule(null)}
+      />
     );
   }
 
@@ -298,472 +197,87 @@ function DayEditor({
       (moduleItemCount[entry.module] || 0) + entry.items.length;
   }
 
-  const pendingTotal = pendingItems.reduce((s, i) => s + i.energy_kcal, 0);
-  const isEditable = date <= today;
-
   const formattedDate = new Date(date + "T12:00:00").toLocaleDateString(
     "pt-BR",
     { weekday: "long", day: "numeric", month: "long" }
   );
 
-  // Get registered items for the active module
-  const activeModuleEntries = entries?.filter((e) => e.module === activeModule) ?? [];
-  const registeredItems: Array<{
-    entryId: Doc<"dailyLogEntries">["_id"];
-    itemIndex: number;
-    name: string;
-    portionGrams: number;
-    energy_kcal: number;
-  }> = [];
-  for (const entry of activeModuleEntries) {
-    for (let i = 0; i < entry.items.length; i++) {
-      registeredItems.push({
-        entryId: entry._id,
-        itemIndex: i,
-        name: entry.items[i].name,
-        portionGrams: entry.items[i].portionGrams,
-        energy_kcal: entry.items[i].energy_kcal,
-      });
-    }
-  }
-  const registeredKcal = registeredItems.reduce((s, i) => s + i.energy_kcal, 0);
+  const modules: string[] = [...MODULE_ORDER];
+  if (totals.byModule["extra"]) modules.push("extra");
 
-  // Build synthetic FoodItem (per-100g values) for the item being edited
-  let editingContext: {
-    food: FoodItem;
-    grams: number;
-    entryId: Doc<"dailyLogEntries">["_id"];
-    itemIndex: number;
-    foodId?: Doc<"foods">["_id"];
-  } | null = null;
-  if (editingItem) {
-    const entry = entries?.find((e) => e._id === editingItem.entryId);
-    const item = entry?.items[editingItem.itemIndex];
-    if (item && item.portionGrams > 0) {
-      const factor = item.portionGrams / 100;
-      editingContext = {
-        food: {
-          _id: (item.foodId ?? "edit-synthetic") as FoodItem["_id"],
-          name: item.name,
-          energy_kcal: item.energy_kcal / factor,
-          protein_g: item.protein_g / factor,
-          carbs_g: item.carbs_g / factor,
-          lipids_g: item.lipids_g / factor,
-          fiber_g: 0,
-          isCustom: !item.foodId,
-        },
-        grams: item.portionGrams,
-        entryId: editingItem.entryId,
-        itemIndex: editingItem.itemIndex,
-        foodId: item.foodId,
-      };
-    }
-  }
-
-  const handleConfirmEdit = async (food: FoodItem, grams: number) => {
-    if (!editingContext) return;
-    const factor = grams / 100;
-    await updateItem({
-      entryId: editingContext.entryId,
-      itemIndex: editingContext.itemIndex,
-      item: {
-        foodId: editingContext.foodId,
-        name: food.name,
-        portionGrams: grams,
-        energy_kcal: food.energy_kcal * factor,
-        protein_g: food.protein_g * factor,
-        carbs_g: food.carbs_g * factor,
-        lipids_g: food.lipids_g * factor,
-      },
-    });
-    setEditingItem(null);
-  };
-
-  // If a module is active, show the unified module view
-  if (activeModule !== null) {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-semibold">
-            {MODULE_LABELS[activeModule] || "Extra"}
-            {activeModule !== "extra" && profile && (
-              <span className="text-xs font-normal text-muted-foreground ml-2">
-                Meta:{" "}
-                {Math.round(
-                  profile.modules[
-                    activeModule as keyof typeof profile.modules
-                  ] || 0
-                )}{" "}
-                kcal
-              </span>
-            )}
-          </h3>
-          <button
-            onClick={() => {
-              setActiveModule(null);
-              setPendingItems([]);
-              setSelectedFood(null);
-              setEditingItem(null);
-              setCopyOpen(false);
-              setCopyTargetDate("");
-              setCopiedTo(null);
-            }}
-            className="text-sm text-muted-foreground hover:text-foreground"
-          >
-            Voltar
-          </button>
-        </div>
-
-        {/* Registered items */}
-        {registeredItems.length > 0 && (
-          <div className="space-y-1">
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Registrados ({registeredItems.length} · {Math.round(registeredKcal)} kcal)
-            </h3>
-            {registeredItems.map((item) => {
-              const isEditingThis =
-                editingItem?.entryId === item.entryId &&
-                editingItem?.itemIndex === item.itemIndex;
-              return (
-                <div
-                  key={`${item.entryId}-${item.itemIndex}`}
-                  className={`flex items-center justify-between rounded-xl p-3 text-sm transition-colors ${
-                    isEditingThis ? "bg-primary/10 ring-1 ring-primary/30" : "bg-card"
-                  }`}
-                >
-                  {isEditable ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedFood(null);
-                        setEditingItem({
-                          entryId: item.entryId,
-                          itemIndex: item.itemIndex,
-                        });
-                      }}
-                      className="flex-1 min-w-0 text-left"
-                    >
-                      <p className="truncate font-medium">{item.name}</p>
-                      <p className="text-[11px] text-muted-foreground tabular-nums">
-                        {Math.round(item.portionGrams)}g · {Math.round(item.energy_kcal)} kcal
-                      </p>
-                    </button>
-                  ) : (
-                    <div className="flex-1 min-w-0">
-                      <p className="truncate font-medium">{item.name}</p>
-                      <p className="text-[11px] text-muted-foreground tabular-nums">
-                        {Math.round(item.portionGrams)}g · {Math.round(item.energy_kcal)} kcal
-                      </p>
-                    </div>
-                  )}
-                  {isEditable && (
-                    <button
-                      onClick={() =>
-                        removeItem({
-                          entryId: item.entryId,
-                          itemIndex: item.itemIndex,
-                        })
-                      }
-                      className="text-red-400 text-xs font-bold w-7 h-7 flex items-center justify-center rounded-full hover:bg-red-400/10 shrink-0 ml-2"
-                    >
-                      X
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-
-            {/* Share module */}
-            {isEditable && (
-              <button
-                type="button"
-                onClick={() => activeModule && handleShareModule(activeModule)}
-                className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors w-full ${
-                  sharedModule === activeModule
-                    ? "bg-primary/10 text-primary ring-1 ring-primary/30"
-                    : "bg-secondary text-muted-foreground"
-                }`}
-              >
-                <span className="text-base">
-                  {sharedModule === activeModule ? "✓" : "→"}
-                </span>
-                <span>
-                  {sharedModule === activeModule
-                    ? `Enviado p/ ${partnerName}`
-                    : `Enviar tudo p/ ${partnerName}`}
-                </span>
-              </button>
-            )}
-
-            {/* Copy module to another day */}
-            {isEditable && (
-              <div className="space-y-1.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCopyOpen((v) => !v);
-                    setCopyTargetDate("");
-                  }}
-                  className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors w-full ${
-                    copiedTo
-                      ? "bg-primary/10 text-primary ring-1 ring-primary/30"
-                      : "bg-secondary text-muted-foreground"
-                  }`}
-                >
-                  <span className="text-base">{copiedTo ? "✓" : "📋"}</span>
-                  <span>
-                    {copiedTo
-                      ? `Copiado para ${copiedTo}`
-                      : "Copiar para outro dia"}
-                  </span>
-                </button>
-
-                {copyOpen && !copiedTo && (
-                  <div className="flex items-center gap-2 pl-1">
-                    <input
-                      type="date"
-                      value={copyTargetDate}
-                      max={today}
-                      onChange={(e) => setCopyTargetDate(e.target.value)}
-                      className="flex-1 h-10 rounded-xl bg-secondary border-0 px-3 text-sm text-foreground"
-                    />
-                    <Button
-                      variant="secondary"
-                      className="h-10 rounded-xl px-4 font-semibold shrink-0"
-                      disabled={
-                        !copyTargetDate || copyTargetDate === date
-                      }
-                      onClick={() =>
-                        activeModule && handleCopyModule(activeModule)
-                      }
-                    >
-                      Copiar
-                    </Button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Edit item */}
-        {isEditable && editingContext && (
-          <div className="space-y-2">
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Editar item
-            </h3>
-            <PortionInput
-              food={editingContext.food}
-              suggestedGrams={editingContext.grams}
-              submitLabel="Atualizar"
-              onConfirm={handleConfirmEdit}
-              onCancel={() => setEditingItem(null)}
-            />
-          </div>
-        )}
-
-        {/* Add section */}
-        {isEditable && !editingContext && (
-          <div className="space-y-3">
-            {registeredItems.length > 0 && (
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Adicionar
-              </h3>
-            )}
-
-            {!selectedFood && (
-              <div className="flex gap-1 rounded-xl bg-secondary p-1">
-                <button
-                  onClick={() => setAddTab("alimentos")}
-                  className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
-                    addTab === "alimentos"
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground"
-                  }`}
-                >
-                  Alimentos
-                </button>
-                <button
-                  onClick={() => setAddTab("receitas")}
-                  className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
-                    addTab === "receitas"
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground"
-                  }`}
-                >
-                  Receitas
-                </button>
-              </div>
-            )}
-
-            {selectedFood ? (
-              <PortionInput
-                food={selectedFood}
-                onConfirm={handleAddFood}
-                onCancel={() => setSelectedFood(null)}
-              />
-            ) : addTab === "alimentos" ? (
-              <FoodSearch
-                onSelect={setSelectedFood}
-                placeholder="Buscar alimento para adicionar..."
-                createdBy={userId}
-              />
-            ) : (
-              <RecipePicker onSelect={handleAddRecipe} />
-            )}
-          </div>
-        )}
-
-        {/* Pending items */}
-        {pendingItems.length > 0 && (
-          <div className="space-y-2">
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Novos itens ({pendingItems.length})
-            </h3>
-            {pendingItems.map((item, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between rounded-xl bg-secondary p-3 text-sm"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="truncate font-medium">{item.name}</p>
-                  <p className="text-[11px] text-muted-foreground tabular-nums">
-                    {Math.round(item.portionGrams)}g
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="font-bold tabular-nums">
-                    {Math.round(item.energy_kcal)} kcal
-                  </span>
-                  <button
-                    onClick={() =>
-                      setPendingItems((prev) =>
-                        prev.filter((_, idx) => idx !== i)
-                      )
-                    }
-                    className="text-red-400 text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full hover:bg-red-400/10"
-                  >
-                    X
-                  </button>
-                </div>
-              </div>
-            ))}
-            <button
-              type="button"
-              onClick={() => setShareWithPartner((v) => !v)}
-              className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors w-full ${
-                shareWithPartner
-                  ? "bg-primary/10 text-primary ring-1 ring-primary/30"
-                  : "bg-secondary text-muted-foreground"
-              }`}
-            >
-              <span className="text-base">{shareWithPartner ? "✓" : "+"}</span>
-              <span>Também para {partnerName}</span>
-            </button>
-
-            <div className="flex items-center justify-between pt-2 border-t border-border/50">
-              <span className="font-bold tabular-nums">
-                Total: {Math.round(pendingTotal)} kcal
-              </span>
-              <Button
-                onClick={handleSaveModule}
-                className="rounded-xl h-10 px-6 font-semibold"
-              >
-                Salvar
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // Default: show day overview with modules (read-only preview)
+  // Resumo do dia; tocar numa refeição abre o editor dela
   return (
-    <div className="space-y-3">
-      <p className="text-xs text-muted-foreground capitalize">
-        {formattedDate}
-      </p>
+    <>
+      <SheetHeader className="pr-12">
+        <SheetTitle className="text-left">Detalhes do dia</SheetTitle>
+        <p className="text-xs text-muted-foreground capitalize">
+          {formattedDate}
+        </p>
+      </SheetHeader>
 
-      {/* Day total */}
-      <div className="flex items-baseline gap-1.5">
-        <span className="text-xl font-bold tabular-nums">
-          {formatKcal(totals.kcal)}
-        </span>
-        <span className="text-sm text-muted-foreground">
-          / {formatKcal(dayTargetKcal)} kcal
-        </span>
-      </div>
-
-      {/* Module cards with read-only entries */}
-      {MODULE_ORDER.map((mod) => (
-        <div key={mod} className="space-y-0">
-          <ModuleCard
-            module={mod}
-            consumed={totals.byModule[mod]?.kcal || 0}
-            budget={profile.modules[mod]}
-            itemCount={moduleItemCount[mod]}
-            onClick={
-              isEditable
-                ? () => {
-                    setActiveModule(mod);
-                    setPendingItems([]);
-                    setAddTab("alimentos");
-                    setShareWithPartner(false);
-                    setEditingItem(null);
-                    setCopyOpen(false);
-                    setCopyTargetDate("");
-                    setCopiedTo(null);
-                  }
-                : undefined
-            }
-          />
-
-          {entries
-            ?.filter((e) => e.module === mod)
-            .map((entry) => (
-              <div
-                key={entry._id}
-                className="ml-10 border-l border-border/40 pl-3 py-1"
-              >
-                {entry.items.map((item, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between text-xs py-0.5"
-                  >
-                    <span className="truncate flex-1 text-muted-foreground">
-                      {item.name}
-                    </span>
-                    <span className="text-muted-foreground/70 ml-2 shrink-0 tabular-nums">
-                      {Math.round(item.portionGrams)}g · {Math.round(item.energy_kcal)} kcal
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ))}
+      <SheetBody className="space-y-3">
+        {/* Day total */}
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-xl font-bold tabular-nums">
+            {formatKcal(totals.kcal)}
+          </span>
+          <span className="text-sm text-muted-foreground">
+            / {formatKcal(dayTargetKcal)} kcal
+          </span>
         </div>
-      ))}
 
-      {/* Extra food button */}
-      {isEditable && (
-        <Button
-          variant="secondary"
-          className="w-full h-11 rounded-xl"
-          onClick={() => {
-            setActiveModule("extra");
-            setPendingItems([]);
-            setAddTab("alimentos");
-            setShareWithPartner(false);
-            setEditingItem(null);
-            setCopyOpen(false);
-            setCopyTargetDate("");
-            setCopiedTo(null);
-          }}
-        >
-          + Adicionar alimento extra
-        </Button>
-      )}
-    </div>
+        {/* Module cards with read-only entries */}
+        {modules.map((mod) => (
+          <div key={mod} className="space-y-0">
+            <ModuleCard
+              module={mod}
+              consumed={totals.byModule[mod]?.kcal || 0}
+              budget={
+                mod === "extra"
+                  ? 0
+                  : profile.modules[mod as keyof typeof profile.modules]
+              }
+              itemCount={moduleItemCount[mod]}
+              onClick={isEditable ? () => setActiveModule(mod) : undefined}
+            />
+
+            {entries
+              .filter((e) => e.module === mod)
+              .map((entry) => (
+                <div
+                  key={entry._id}
+                  className="ml-10 border-l border-border/40 pl-3 py-1"
+                >
+                  {entry.items.map((item, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between text-xs py-0.5"
+                    >
+                      <span className="truncate flex-1 text-muted-foreground">
+                        {item.name}
+                      </span>
+                      <span className="text-muted-foreground/70 ml-2 shrink-0 tabular-nums">
+                        {Math.round(item.portionGrams)}g · {Math.round(item.energy_kcal)} kcal
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+          </div>
+        ))}
+
+        {/* Extra food button */}
+        {isEditable && (
+          <Button
+            variant="secondary"
+            className="w-full h-11 rounded-xl"
+            onClick={() => setActiveModule("extra")}
+          >
+            + Adicionar alimento extra
+          </Button>
+        )}
+      </SheetBody>
+    </>
   );
 }
 
@@ -795,7 +309,7 @@ function groupByMonth(
 
 /* ---------- Main content ---------- */
 function DiarioContent() {
-  const { userId, setUserId } = useCurrentUser();
+  const { userId } = useCurrentUser();
   const today = getTodayISO();
 
   const [editingDate, setEditingDate] = useState<string | null>(null);
@@ -853,10 +367,7 @@ function DiarioContent() {
       {/* Header */}
       <div className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl safe-top">
         <div className="mx-auto flex max-w-md items-center justify-between px-4 py-3">
-          <div className="flex-1">
-            <h1 className="text-base font-bold tracking-tight">Diario</h1>
-          </div>
-          <UserSwitcher userId={userId} onSwitch={setUserId} />
+          <h1 className="text-base font-bold tracking-tight">Diario</h1>
         </div>
       </div>
 
@@ -868,7 +379,7 @@ function DiarioContent() {
             value={manualDate}
             max={today}
             onChange={(e) => setManualDate(e.target.value)}
-            className="flex-1 h-11 rounded-xl bg-secondary border-0 px-3 text-sm text-foreground"
+            className="flex-1 h-11 rounded-xl bg-secondary border-0 px-3 text-base text-foreground"
           />
           <Button
             variant="secondary"
@@ -956,22 +467,17 @@ function DiarioContent() {
       >
         <SheetContent
           side="bottom"
-          className="h-[90vh] rounded-t-2xl border-t border-border/50"
+          className="data-[side=bottom]:h-[92dvh] gap-0 rounded-t-2xl border-t border-border/50"
         >
-          <SheetHeader>
-            <SheetTitle className="text-left">Detalhes do dia</SheetTitle>
-          </SheetHeader>
-          <div className="mt-4 px-4 overflow-y-auto overflow-x-hidden max-h-[calc(90vh-80px)]">
-            {editingDate && (
-              <DayEditor
-                userId={userId}
-                date={editingDate}
-                profile={profile}
-                dayTargetKcal={targetsForDate(editingDate).kcal}
-                onClose={() => setEditingDate(null)}
-              />
-            )}
-          </div>
+          {editingDate && (
+            <DayEditor
+              key={editingDate}
+              userId={userId}
+              date={editingDate}
+              profile={profile}
+              dayTargetKcal={targetsForDate(editingDate).kcal}
+            />
+          )}
         </SheetContent>
       </Sheet>
 

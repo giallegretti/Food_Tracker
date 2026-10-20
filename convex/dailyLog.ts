@@ -251,13 +251,14 @@ export const shareModuleEntries = mutation({
   },
 });
 
-// Copy all entries of a single module from one date to another (same user)
+// Copy all entries of a single module to another date and/or module (same user)
 export const copyModuleToDate = mutation({
   args: {
     userId: v.string(),
     fromDate: v.string(),
     module: v.string(),
     toDate: v.string(),
+    toModule: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const entries = await ctx.db
@@ -274,7 +275,7 @@ export const copyModuleToDate = mutation({
       await ctx.db.insert("dailyLogEntries", {
         userId: args.userId,
         date: args.toDate,
-        module: entry.module,
+        module: args.toModule ?? entry.module,
         recipeId: entry.recipeId,
         items: entry.items,
         totalKcal: entry.totalKcal,

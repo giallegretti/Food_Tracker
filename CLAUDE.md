@@ -37,7 +37,7 @@ npm run dev
 - `src/components/food/PortionInput.tsx` - Portion calculator
 
 ## Users
-Simple toggle (no auth): "giovanna" | "ricardo" stored in localStorage.
+Single user (no auth): `useCurrentUser` always returns "giovanna". Ricardo stopped using the app, so his profile is hidden from the UI (no switcher, no partner sharing), but his data stays in Convex under userId "ricardo".
 
 ## Deploy Protocol
 

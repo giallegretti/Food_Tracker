@@ -249,7 +249,7 @@ function MeusAlimentos({ userId }: { userId: string }) {
               value={formName}
               onChange={(e) => setFormName(e.target.value)}
               placeholder="Ex: Pao de queijo caseiro"
-              className="h-11 rounded-xl bg-secondary border-0 text-sm"
+              className="h-11 rounded-xl bg-secondary border-0 text-base"
             />
           </div>
 
@@ -264,7 +264,7 @@ function MeusAlimentos({ userId }: { userId: string }) {
                 value={formKcal}
                 onChange={(e) => setFormKcal(e.target.value)}
                 placeholder="0"
-                className="h-10 rounded-xl bg-secondary border-0 text-sm tabular-nums"
+                className="h-10 rounded-xl bg-secondary border-0 text-base tabular-nums"
               />
             </div>
             <div>
@@ -277,7 +277,7 @@ function MeusAlimentos({ userId }: { userId: string }) {
                 value={formProtein}
                 onChange={(e) => setFormProtein(e.target.value)}
                 placeholder="0"
-                className="h-10 rounded-xl bg-secondary border-0 text-sm tabular-nums"
+                className="h-10 rounded-xl bg-secondary border-0 text-base tabular-nums"
               />
             </div>
             <div>
@@ -290,7 +290,7 @@ function MeusAlimentos({ userId }: { userId: string }) {
                 value={formCarbs}
                 onChange={(e) => setFormCarbs(e.target.value)}
                 placeholder="0"
-                className="h-10 rounded-xl bg-secondary border-0 text-sm tabular-nums"
+                className="h-10 rounded-xl bg-secondary border-0 text-base tabular-nums"
               />
             </div>
             <div>
@@ -303,7 +303,7 @@ function MeusAlimentos({ userId }: { userId: string }) {
                 value={formFat}
                 onChange={(e) => setFormFat(e.target.value)}
                 placeholder="0"
-                className="h-10 rounded-xl bg-secondary border-0 text-sm tabular-nums"
+                className="h-10 rounded-xl bg-secondary border-0 text-base tabular-nums"
               />
             </div>
             <div>
@@ -316,7 +316,7 @@ function MeusAlimentos({ userId }: { userId: string }) {
                 value={formFiber}
                 onChange={(e) => setFormFiber(e.target.value)}
                 placeholder="0"
-                className="h-10 rounded-xl bg-secondary border-0 text-sm tabular-nums"
+                className="h-10 rounded-xl bg-secondary border-0 text-base tabular-nums"
               />
             </div>
           </div>
